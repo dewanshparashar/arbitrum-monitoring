@@ -11,15 +11,16 @@ import {
   fetchChainState,
   isBoldEnabled,
 } from './blockchain'
+import { buildAssertionFindings } from './monitoring'
 import { getBlockTimeForChain, getChainFromId } from './chains'
 import {
   MAXIMUM_SEARCH_DAYS,
   SAFETY_BUFFER_DAYS,
   VALIDATOR_AFK_BLOCKS,
 } from './constants'
-import { analyzeAssertionEvents } from './monitoring'
 import { reportAssertionMonitorErrorToSlack } from './reportAssertionMonitorAlertToSlack'
-import { BlockRange } from './types'
+import { buildAssertionMonitorResult } from './result'
+import { AssertionMonitorResult, BlockRange } from './types'
 
 /**  Retrieves and validates the monitor configuration from the config file. */
 export const getMonitorConfig = (configPath: string = DEFAULT_CONFIG_PATH) => {
@@ -112,6 +113,33 @@ export const checkChainForAssertionIssues = async (
   blockRange?: BlockRange,
   options?: { enableAlerting: boolean }
 ) => {
+  const result = await runAssertionMonitorForChain(
+    childChainInfo,
+    blockRange,
+    options
+  )
+
+  if (result.findings.length > 0) {
+    console.log(
+      `Generated ${result.findings.length} alerts for ${childChainInfo.name}`
+    )
+    return formatAssertionMonitorResult(result)
+  }
+
+  console.log(`No issues found for ${childChainInfo.name}`)
+  return
+}
+
+export const formatAssertionMonitorResult = (
+  result: AssertionMonitorResult
+) => `${result.chainName}:\n- ${result.findings.map(f => f.message).join('\n- ')}`
+
+export const runAssertionMonitorForChain = async (
+  childChainInfo: ChainInfo,
+  blockRange?: BlockRange,
+  options?: { enableAlerting: boolean }
+): Promise<AssertionMonitorResult> => {
+  const startedAt = Date.now()
   console.log(`\nMonitoring ${childChainInfo.name}...`)
 
   const parentChain = getChainFromId(childChainInfo.parentChainId)
@@ -149,18 +177,20 @@ export const checkChainForAssertionIssues = async (
     toBlock,
   })
 
-  const alerts = await analyzeAssertionEvents(
+  const findings = buildAssertionFindings(
     chainState,
     childChainInfo,
     isBold
   )
-  if (alerts.length > 0) {
-    console.log(`Generated ${alerts.length} alerts for ${childChainInfo.name}`)
-    return `${childChainInfo.name}:\n- ${alerts.join('\n- ')}`
-  } else {
-    console.log(`No issues found for ${childChainInfo.name}`)
-  }
-  return
+
+  return buildAssertionMonitorResult({
+    chainInfo: childChainInfo,
+    chainState,
+    isBold,
+    findings,
+    startedAt,
+    finishedAt: Date.now(),
+  })
 }
 
 /**
