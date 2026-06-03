@@ -16,8 +16,29 @@ import {
   VALIDATOR_AFK_BLOCKS,
 } from './constants'
 import { getBlockTimeForChain, getChainFromId } from './chains'
-import type { ChainState } from './types'
+import type { AssertionFinding, ChainState } from './types'
 import { isEventRecent } from './utils'
+
+const createFinding = ({
+  code,
+  chainInfo,
+  severity,
+  title,
+  message,
+}: {
+  code: AssertionFinding['code']
+  chainInfo: ChainInfo
+  severity: AssertionFinding['severity']
+  title: string
+  message: string
+}): AssertionFinding => ({
+  code,
+  monitor: 'assertion',
+  chainId: chainInfo.chainId,
+  severity,
+  title,
+  message,
+})
 
 /**
  * Formats duration in a human-readable format
@@ -98,7 +119,17 @@ export const analyzeAssertionEvents = async (
   chainInfo: ChainInfo,
   isBold: boolean = true
 ): Promise<string[]> => {
-  const alerts: string[] = []
+  return buildAssertionFindings(chainState, chainInfo, isBold).map(
+    finding => finding.message
+  )
+}
+
+export const buildAssertionFindings = (
+  chainState: ChainState,
+  chainInfo: ChainInfo,
+  isBold: boolean = true
+): AssertionFinding[] => {
+  const findings: AssertionFinding[] = []
 
   const {
     doesLatestChildCreatedBlockExist,
@@ -114,46 +145,126 @@ export const analyzeAssertionEvents = async (
   } = generateConditionsForAlerts(chainInfo, chainState, isBold)
 
   if (isValidatorWhitelistDisabledOnClassic) {
-    alerts.push(VALIDATOR_WHITELIST_DISABLED_ALERT)
+    findings.push(
+      createFinding({
+        code: 'validator_whitelist_disabled',
+        chainInfo,
+        severity: 'warning',
+        title: 'Validator whitelist disabled',
+        message: VALIDATOR_WHITELIST_DISABLED_ALERT,
+      })
+    )
   }
 
   if (isBaseStakeBelowThresholdOnBold) {
-    alerts.push(BOLD_LOW_BASE_STAKE_ALERT)
+    findings.push(
+      createFinding({
+        code: 'bold_low_base_stake',
+        chainInfo,
+        severity: 'warning',
+        title: 'BoLD base stake below threshold',
+        message: BOLD_LOW_BASE_STAKE_ALERT,
+      })
+    )
   }
 
   if (!doesLatestChildCreatedBlockExist) {
-    alerts.push(createNoCreationEventsAlert(chainState, chainInfo))
+    findings.push(
+      createFinding({
+        code: 'no_creation_events',
+        chainInfo,
+        severity: 'critical',
+        title: 'No creation events found',
+        message: createNoCreationEventsAlert(chainState, chainInfo),
+      })
+    )
   }
 
   if (!doesLatestChildConfirmedBlockExist) {
-    alerts.push(NO_CONFIRMATION_EVENTS_ALERT)
+    findings.push(
+      createFinding({
+        code: 'no_confirmation_events',
+        chainInfo,
+        severity: 'critical',
+        title: 'No confirmation events found',
+        message: NO_CONFIRMATION_EVENTS_ALERT,
+      })
+    )
   }
 
   if (noConfirmedBlocksWithConfirmationEvents) {
-    alerts.push(NO_CONFIRMATION_BLOCKS_WITH_CONFIRMATION_EVENTS_ALERT)
+    findings.push(
+      createFinding({
+        code: 'no_confirmation_blocks_with_events',
+        chainInfo,
+        severity: 'critical',
+        title: 'Confirmation events missing blocks',
+        message: NO_CONFIRMATION_BLOCKS_WITH_CONFIRMATION_EVENTS_ALERT,
+      })
+    )
   }
 
   if (hasActivityWithoutRecentAssertions) {
-    alerts.push(CHAIN_ACTIVITY_WITHOUT_ASSERTIONS_ALERT)
+    findings.push(
+      createFinding({
+        code: 'chain_activity_without_assertions',
+        chainInfo,
+        severity: 'warning',
+        title: 'Chain activity without recent assertions',
+        message: CHAIN_ACTIVITY_WITHOUT_ASSERTIONS_ALERT,
+      })
+    )
   }
 
   if (noConfirmationsWithCreationEvents) {
-    alerts.push(NO_CONFIRMATION_EVENTS_ALERT)
+    findings.push(
+      createFinding({
+        code: 'no_confirmation_events',
+        chainInfo,
+        severity: 'critical',
+        title: 'No confirmation events found',
+        message: NO_CONFIRMATION_EVENTS_ALERT,
+      })
+    )
   }
 
   if (confirmationDelayExceedsPeriod) {
-    alerts.push(CONFIRMATION_DELAY_ALERT)
+    findings.push(
+      createFinding({
+        code: 'confirmation_delay_exceeded',
+        chainInfo,
+        severity: 'critical',
+        title: 'Confirmation period exceeded',
+        message: CONFIRMATION_DELAY_ALERT,
+      })
+    )
   }
 
   if (creationEventStuckInChallengePeriod) {
-    alerts.push(CREATION_EVENT_STUCK_ALERT)
+    findings.push(
+      createFinding({
+        code: 'creation_event_stuck',
+        chainInfo,
+        severity: 'critical',
+        title: 'Creation event stuck in challenge period',
+        message: CREATION_EVENT_STUCK_ALERT,
+      })
+    )
   }
 
   if (nonBoldMissingRecentCreation) {
-    alerts.push(NON_BOLD_NO_RECENT_CREATION_ALERT)
+    findings.push(
+      createFinding({
+        code: 'non_bold_no_recent_creation',
+        chainInfo,
+        severity: 'warning',
+        title: 'No recent classic creation events',
+        message: NON_BOLD_NO_RECENT_CREATION_ALERT,
+      })
+    )
   }
 
-  return alerts
+  return findings
 }
 
 /**
