@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "rm -rf ./dist && mkdir -p ./dist && cp ./index.html ./app.js ./styles.css ./server.js ./dist",
+    "build": "rm -rf ./dist && mkdir -p ./dist && cp ./index.html ./app.js ./config.js ./styles.css ./server.js ./dist",
     "dev": "yarn build && node ./dist/server.js",
     "test": "yarn build"
   }

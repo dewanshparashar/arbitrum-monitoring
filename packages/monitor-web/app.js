@@ -24,7 +24,10 @@ const formatTime = (value) => {
 
 const formatJson = (value) => escapeHtml(JSON.stringify(value, null, 2))
 
-const loadApiBase = () => localStorage.getItem('monitor-api-base') || ''
+const loadConfigApiBase = () => window.MONITOR_WEB_CONFIG?.apiBase || ''
+
+const loadApiBase = () =>
+  localStorage.getItem('monitor-api-base') || loadConfigApiBase()
 
 const saveApiBase = (value) => {
   localStorage.setItem('monitor-api-base', value.trim())

@@ -10,11 +10,20 @@ import { handleApiRequest } from './routes'
 export const getApiConfig = () =>
   yargs(process.argv.slice(2))
     .options({
-      host: { type: 'string', default: '0.0.0.0' },
-      port: { type: 'number', default: 4010 },
-      dbPath: { type: 'string', default: 'monitoring.sqlite' },
-      postgresUrl: { type: 'string' },
-      corsOrigin: { type: 'string', default: '*' },
+      host: { type: 'string', default: process.env.MONITOR_API_HOST || '0.0.0.0' },
+      port: {
+        type: 'number',
+        default: Number(process.env.MONITOR_API_PORT || 4010),
+      },
+      dbPath: {
+        type: 'string',
+        default: process.env.MONITOR_DB_PATH || 'monitoring.sqlite',
+      },
+      postgresUrl: { type: 'string', default: process.env.POSTGRES_URL },
+      corsOrigin: {
+        type: 'string',
+        default: process.env.MONITOR_API_CORS_ORIGIN || '*',
+      },
     })
     .strict()
     .parseSync()

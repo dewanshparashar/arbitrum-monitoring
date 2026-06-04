@@ -1,0 +1,32 @@
+services:
+  monitor-api:
+    build: .
+    environment:
+      POSTGRES_URL: ${POSTGRES_URL}
+      MONITOR_API_HOST: 0.0.0.0
+      MONITOR_API_PORT: 4010
+      MONITOR_API_CORS_ORIGIN: ${MONITOR_API_CORS_ORIGIN:-http://localhost:4020}
+      MONITOR_DB_PATH: ${MONITOR_DB_PATH:-./monitoring.sqlite}
+    ports:
+      - "4010:4010"
+    command: ["/bin/sh", "/app/docker/run-service.sh", "monitor-api"]
+
+  monitor-worker:
+    build: .
+    environment:
+      POSTGRES_URL: ${POSTGRES_URL}
+      MONITOR_CONFIG_PATH: ${MONITOR_CONFIG_PATH:-./config.json}
+      MONITOR_DB_PATH: ${MONITOR_DB_PATH:-./monitoring.sqlite}
+      MONITOR_WORKER_ONCE: ${MONITOR_WORKER_ONCE:-false}
+      MONITOR_WORKER_POLL_INTERVAL_MS: ${MONITOR_WORKER_POLL_INTERVAL_MS:-60000}
+    volumes:
+      - ./config.json:/app/config.json:ro
+    command: ["/bin/sh", "/app/docker/run-service.sh", "monitor-worker"]
+
+  monitor-web:
+    build: .
+    environment:
+      PORT: 4020
+    ports:
+      - "4020:4020"
+    command: ["/bin/sh", "/app/docker/run-service.sh", "monitor-web"]

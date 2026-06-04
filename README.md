@@ -28,6 +28,17 @@ cd arbitrum-monitoring
 yarn install
 ```
 
+## MVP runtime
+
+The fastest MVP path is:
+
+- `monitor-worker` on a long-running host
+- `monitor-api` as the read layer
+- `monitor-web` as a minimal consumer
+- Postgres as the shared database
+
+Supabase Postgres fits the database role well. The worker should still run as a normal process, not as a serverless job.
+
 ## Configuration
 
 ### Chain Configuration
@@ -87,6 +98,22 @@ Required environment variables:
 - `RETRYABLE_MONITORING_NOTION_TOKEN`: Notion API token for database integration
 - `RETRYABLE_MONITORING_NOTION_DB_ID`: Notion database ID for storing retryable tickets
 
+### Runtime environment
+
+Copy the environment file:
+
+```bash
+cp .env.example .env
+```
+
+The main MVP runtime variables are:
+
+- `POSTGRES_URL`
+- `MONITOR_CONFIG_PATH`
+- `MONITOR_API_PORT`
+- `MONITOR_API_CORS_ORIGIN`
+- `MONITOR_WORKER_POLL_INTERVAL_MS`
+
 ## Usage
 
 All monitors support these base options:
@@ -112,6 +139,42 @@ See individual monitor READMEs for specific options and features:
 - [Retryable Monitor Details](./packages/retryable-monitor/README.md)
 - [Batch Poster Monitor Details](./packages/batch-poster-monitor/README.md)
 - [Assertion Monitor Details](./packages/assertion-monitor/README.md)
+
+## Product services
+
+```bash
+# Worker
+yarn monitor-worker --postgresUrl "$POSTGRES_URL"
+
+# Read API
+yarn monitor-api --postgresUrl "$POSTGRES_URL" --corsOrigin http://localhost:4020
+
+# Minimal web app
+yarn monitor-web
+```
+
+The web app is intentionally minimal. It reads data from the API and does not call chains directly.
+
+## Docker Compose
+
+For a quick local or single-host MVP bring-up:
+
+```bash
+cp .env.example .env
+cp config.example.json config.json
+docker compose up --build
+```
+
+This starts:
+
+- `monitor-worker`
+- `monitor-api`
+- `monitor-web`
+
+Default local URLs:
+
+- web: `http://localhost:4020`
+- api: `http://localhost:4010`
 
 ### Notion Integration
 
