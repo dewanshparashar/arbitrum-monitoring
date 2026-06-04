@@ -22,6 +22,8 @@ import { reportAssertionMonitorErrorToSlack } from './reportAssertionMonitorAler
 import { buildAssertionMonitorResult } from './result'
 import { AssertionMonitorResult, BlockRange } from './types'
 
+const TESTNET_PARENT_SEARCH_CAP = 10_000
+
 /**  Retrieves and validates the monitor configuration from the config file. */
 export const getMonitorConfig = (configPath: string = DEFAULT_CONFIG_PATH) => {
   const options = yargs(process.argv.slice(2))
@@ -82,6 +84,17 @@ function calculateSearchWindow(
   }
 }
 
+const capSearchWindow = (
+  parentChain: ReturnType<typeof getChainFromId>,
+  blockRange: number
+) => {
+  if (!parentChain?.testnet) {
+    return blockRange
+  }
+
+  return Math.min(blockRange, TESTNET_PARENT_SEARCH_CAP)
+}
+
 /**
  * Determines the block range to scan for assertions based on chain configuration.
  * Uses chain-specific parameters to calculate an appropriate range that covers potential confirmation delays.
@@ -92,10 +105,17 @@ export const getBlockRange = async (
 ) => {
   const latestBlockNumber = await client.getBlockNumber()
   const parentChain = getChainFromId(childChainInfo.parentChainId)
-  const { blocks: blockRange } = calculateSearchWindow(
+  const { blocks } = calculateSearchWindow(
     childChainInfo,
     parentChain
   )
+  const blockRange = capSearchWindow(parentChain, blocks)
+
+  if (blockRange !== blocks) {
+    console.log(
+      `Capping assertion search window for ${childChainInfo.name} to ${blockRange} blocks on testnet parent chain`
+    )
+  }
 
   const fromBlock = await client.getBlock({
     blockNumber: latestBlockNumber - BigInt(blockRange),
