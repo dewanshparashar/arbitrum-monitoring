@@ -17,8 +17,9 @@ import {
   sqlitePruneStatements,
   sqliteSchemaStatements,
 } from './schema'
+import { MonitorHistoryParams, MonitorStore } from './store'
 
-export class SqliteMonitorStore {
+export class SqliteMonitorStore implements MonitorStore {
   private readonly db: DatabaseSync
 
   constructor(location: string) {
@@ -72,12 +73,7 @@ export class SqliteMonitorStore {
     return this.get(selectLatestSnapshotQuery(monitor, chainId))
   }
 
-  readMonitorHistory(params: {
-    monitor: MonitorType
-    chainId: number
-    since: number
-    limit?: number
-  }) {
+  readMonitorHistory(params: MonitorHistoryParams) {
     return this.all(selectMonitorHistoryQuery(params))
   }
 

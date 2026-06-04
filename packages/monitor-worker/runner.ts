@@ -1,5 +1,5 @@
 import { MonitorRunResult } from 'monitor-core'
-import { SqliteMonitorStore } from 'storage'
+import { MonitorStore } from 'storage'
 import { ChildNetwork, sleep } from 'utils'
 import { MonitorExecutor, WorkerLoopOptions, WorkerScheduleState } from './types'
 
@@ -68,7 +68,7 @@ export const runDueMonitors = async ({
 }: {
   childChains: ChildNetwork[]
   monitors: MonitorExecutor[]
-  store: SqliteMonitorStore
+  store: MonitorStore
   scheduleState: WorkerScheduleState
   logger?: Pick<Console, 'log' | 'error'>
   now?: number
@@ -81,7 +81,7 @@ export const runDueMonitors = async ({
 
     for (const chain of childChains) {
       const result = await runMonitorSafely(monitor, chain)
-      store.persistResult(result)
+      await store.persistResult(result)
       results.push(result)
 
       if (result.status === 'error') {
@@ -94,7 +94,7 @@ export const runDueMonitors = async ({
     scheduleState[monitor.type] = now
   }
 
-  store.pruneOldRuns(now)
+  await store.pruneOldRuns(now)
   return results
 }
 
@@ -107,7 +107,7 @@ export const runWorkerLoop = async ({
 }: {
   childChains: ChildNetwork[]
   monitors: MonitorExecutor[]
-  store: SqliteMonitorStore
+  store: MonitorStore
   loop: WorkerLoopOptions
   logger?: Pick<Console, 'log' | 'error'>
 }) => {

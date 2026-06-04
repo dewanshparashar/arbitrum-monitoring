@@ -2,10 +2,13 @@ import { describe, expect, test } from 'vitest'
 import { MonitorRunResult } from 'monitor-core'
 import {
   MONITOR_RETENTION_DAYS,
+  PostgresMonitorStore,
   SqliteMonitorStore,
+  createMonitorStore,
   createLatestSnapshotId,
   createMonitorRunId,
   getRetentionCutoff,
+  inferMonitorStoreVendor,
   insertMonitorRunQuery,
   materializeMonitorResult,
   selectMonitorHistoryQuery,
@@ -232,5 +235,31 @@ describe('materializeMonitorResult', () => {
     ).toHaveLength(1)
 
     store.close()
+  })
+
+  test('creates the right store vendor from config hints', async () => {
+    const sqliteStore = createMonitorStore({
+      vendor: inferMonitorStoreVendor({ sqlitePath: 'monitoring.sqlite' }),
+      sqlitePath: 'monitoring.sqlite',
+    })
+    const postgresStore = createMonitorStore({
+      vendor: inferMonitorStoreVendor({
+        postgresUrl: 'postgresql://postgres:postgres@localhost:5432/monitoring',
+      }),
+      postgresUrl: 'postgresql://postgres:postgres@localhost:5432/monitoring',
+    })
+
+    expect(inferMonitorStoreVendor({ sqlitePath: 'monitoring.sqlite' })).toBe(
+      'sqlite'
+    )
+    expect(
+      inferMonitorStoreVendor({
+        postgresUrl: 'postgresql://postgres:postgres@localhost:5432/monitoring',
+      })
+    ).toBe('postgres')
+    expect(sqliteStore).toBeInstanceOf(SqliteMonitorStore)
+    expect(postgresStore).toBeInstanceOf(PostgresMonitorStore)
+
+    await postgresStore.close()
   })
 })
