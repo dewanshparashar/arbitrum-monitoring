@@ -1,0 +1,17 @@
+{
+  "name": "storage",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "monitor-core": "*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.5"
+  },
+  "scripts": {
+    "build": "rm -rf ./dist && tsc",
+    "lint": "eslint .",
+    "test": "vitest run __test__/*.test.ts"
+  }
+}
