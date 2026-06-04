@@ -24,17 +24,34 @@ const formatTime = (value) => {
 
 const formatJson = (value) => escapeHtml(JSON.stringify(value, null, 2))
 
+const getDefaultApiBase = () => {
+  const configured = window.MONITOR_WEB_CONFIG?.apiBase
+  if (configured) {
+    return configured
+  }
+
+  if (
+    window.location.protocol === 'http:' &&
+    window.location.port === '4020' &&
+    ['localhost', '127.0.0.1'].includes(window.location.hostname)
+  ) {
+    return `http://${window.location.hostname}:4010`
+  }
+
+  return ''
+}
+
 const loadConfigApiBase = () => window.MONITOR_WEB_CONFIG?.apiBase || ''
 
 const loadApiBase = () =>
-  localStorage.getItem('monitor-api-base') || loadConfigApiBase()
+  localStorage.getItem('monitor-api-base') || loadConfigApiBase() || getDefaultApiBase()
 
 const saveApiBase = (value) => {
   localStorage.setItem('monitor-api-base', value.trim())
 }
 
 const getApiBase = () => {
-  const value = loadApiBase()
+  const value = apiBaseInput.value.trim() || loadApiBase()
   return value ? value.replace(/\/$/, '') : ''
 }
 
@@ -56,10 +73,25 @@ const setRoute = (chainId, monitor) => {
 
 const apiFetch = async (pathname) => {
   const response = await fetch(`${getApiBase()}${pathname}`)
-  const body = await response.json()
+  const text = await response.text()
+  let body = null
+
+  if (text) {
+    try {
+      body = JSON.parse(text)
+    } catch (_) {
+      if (!response.ok) {
+        throw new Error(
+          `${response.status} ${response.statusText}: ${text}`
+        )
+      }
+
+      throw new Error(`Expected JSON response from ${response.url}`)
+    }
+  }
 
   if (!response.ok) {
-    throw new Error(body.error || 'Request failed.')
+    throw new Error(body?.error || `${response.status} ${response.statusText}`)
   }
 
   return body
@@ -83,6 +115,11 @@ const renderOverview = (overview) => {
 }
 
 const renderChains = (chains, selected) => {
+  if (chains.length === 0) {
+    chainsNode.innerHTML = '<p>No chain snapshots found yet.</p>'
+    return
+  }
+
   const rows = chains
     .map((chain) => {
       const chips = monitors
@@ -171,6 +208,7 @@ const renderDetail = (detail) => {
         <tr><th>Run ID</th><td>${escapeHtml(detail.latest.run.id)}</td></tr>
         <tr><th>Started</th><td>${formatTime(detail.latest.run.startedAt)}</td></tr>
         <tr><th>Finished</th><td>${formatTime(detail.latest.run.finishedAt)}</td></tr>
+        <tr><th>Run error</th><td>${escapeHtml(detail.latest.run.error || '—')}</td></tr>
       </tbody>
     </table>
     <h3>Latest run findings</h3>
@@ -251,13 +289,13 @@ const loadPage = async () => {
 
     if (!selection) {
       renderDetail(null)
-      setStatus('Loaded.')
+      setStatus(`Loaded from ${getApiBase()}.`)
       return
     }
 
     const detail = await loadDetail(selection)
     renderDetail(detail)
-    setStatus('Loaded.')
+    setStatus(`Loaded from ${getApiBase()}.`)
   } catch (error) {
     renderDetail(null)
     setStatus(error instanceof Error ? error.message : 'Failed to load.')
