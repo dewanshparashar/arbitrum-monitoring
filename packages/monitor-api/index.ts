@@ -14,6 +14,7 @@ export const getApiConfig = () =>
       port: { type: 'number', default: 4010 },
       dbPath: { type: 'string', default: 'monitoring.sqlite' },
       postgresUrl: { type: 'string' },
+      corsOrigin: { type: 'string', default: '*' },
     })
     .strict()
     .parseSync()
@@ -21,15 +22,24 @@ export const getApiConfig = () =>
 const writeJson = (
   response: ServerResponse,
   status: number,
-  body: unknown
+  body: unknown,
+  corsOrigin: string
 ) => {
   response.statusCode = status
+  response.setHeader('access-control-allow-origin', corsOrigin)
+  response.setHeader('access-control-allow-methods', 'GET,OPTIONS')
+  response.setHeader('access-control-allow-headers', 'content-type')
   response.setHeader('content-type', 'application/json')
   response.end(JSON.stringify(body))
 }
 
-export const createApiServer = (store: MonitorStore) =>
+export const createApiServer = (store: MonitorStore, corsOrigin = '*') =>
   createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    if (request.method === 'OPTIONS') {
+      writeJson(response, 200, { ok: true }, corsOrigin)
+      return
+    }
+
     const url = new URL(request.url || '/', 'http://localhost')
     const apiResponse = await handleApiRequest({
       method: request.method || 'GET',
@@ -38,7 +48,7 @@ export const createApiServer = (store: MonitorStore) =>
       store,
     })
 
-    writeJson(response, apiResponse.status, apiResponse.body)
+    writeJson(response, apiResponse.status, apiResponse.body, corsOrigin)
   })
 
 export const main = async () => {
@@ -53,7 +63,7 @@ export const main = async () => {
   })
 
   await store.initialize()
-  const server = createApiServer(store)
+  const server = createApiServer(store, options.corsOrigin)
 
   server.listen(options.port, options.host, () => {
     console.log(`monitor-api listening on http://${options.host}:${options.port}`)
