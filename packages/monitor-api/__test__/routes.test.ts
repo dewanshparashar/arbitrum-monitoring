@@ -49,6 +49,12 @@ describe('handleApiRequest', () => {
     store.initialize()
     store.persistResult(result)
 
+    const health = await handleApiRequest({
+      method: 'GET',
+      pathname: '/health',
+      searchParams: new URLSearchParams(),
+      store,
+    })
     const overview = await handleApiRequest({
       method: 'GET',
       pathname: '/api/overview',
@@ -80,6 +86,15 @@ describe('handleApiRequest', () => {
       store,
     })
 
+    expect(health.status).toBe(200)
+    expect(health.body).toMatchObject({
+      ok: true,
+      store: 'sqlite',
+      overview: {
+        chains: 1,
+        snapshots: 1,
+      },
+    })
     expect(overview.status).toBe(200)
     expect(overview.body).toMatchObject({
       chains: 1,

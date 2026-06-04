@@ -36,6 +36,11 @@ export class SqliteMonitorStore implements MonitorStore {
     }
   }
 
+  healthCheck() {
+    this.db.prepare('SELECT 1').get()
+    return { ok: true, store: 'sqlite' as const }
+  }
+
   persistResult(result: MonitorRunResult) {
     const rows = materializeMonitorResult(result)
 

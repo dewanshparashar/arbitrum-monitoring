@@ -9,6 +9,9 @@ export interface MonitorHistoryParams {
 
 export interface MonitorStore {
   initialize(): void | Promise<void>
+  healthCheck():
+    | { ok: boolean; store: 'sqlite' | 'postgres' }
+    | Promise<{ ok: boolean; store: 'sqlite' | 'postgres' }>
   persistResult(result: MonitorRunResult): void | Promise<void>
   pruneOldRuns(now?: number, retentionDays?: number): number | Promise<number>
   readLatestSnapshots(
