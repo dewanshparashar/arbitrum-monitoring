@@ -45,6 +45,11 @@ export class PostgresMonitorStore implements MonitorStore {
     }
   }
 
+  async healthCheck() {
+    await this.pool.query('SELECT 1')
+    return { ok: true, store: 'postgres' as const }
+  }
+
   async persistResult(result: MonitorRunResult) {
     const rows = materializeMonitorResult(result)
     const client = await this.pool.connect()

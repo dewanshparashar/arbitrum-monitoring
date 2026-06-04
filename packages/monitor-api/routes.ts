@@ -124,6 +124,17 @@ const buildChains = (snapshots: ReturnType<typeof serializeSnapshot>[]) => {
   )
 }
 
+const buildHealth = async (store: MonitorStore) => {
+  const health = await store.healthCheck()
+  const snapshots = (await store.readLatestSnapshots()).map(serializeSnapshot)
+
+  return {
+    ok: health.ok,
+    store: health.store,
+    overview: buildOverview(snapshots),
+  }
+}
+
 export const handleApiRequest = async ({
   method,
   pathname,
@@ -140,7 +151,17 @@ export const handleApiRequest = async ({
   }
 
   if (pathname === '/health') {
-    return ok({ ok: true })
+    try {
+      return ok(await buildHealth(store))
+    } catch (error) {
+      return {
+        status: 503,
+        body: {
+          ok: false,
+          error: error instanceof Error ? error.message : 'Health check failed.',
+        },
+      }
+    }
   }
 
   if (pathname === '/api/overview') {

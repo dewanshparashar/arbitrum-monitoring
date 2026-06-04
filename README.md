@@ -212,6 +212,45 @@ The worker deployment still needs:
 - `MONITOR_CONFIG_PATH`
 - access to `config.json`
 
+## Readiness checklist
+
+Use this sequence for a local or hosted MVP verification:
+
+1. Run one worker pass:
+
+```bash
+yarn monitor-worker --once --postgresUrl "$POSTGRES_URL"
+```
+
+2. Start the API:
+
+```bash
+yarn monitor-api --postgresUrl "$POSTGRES_URL" --corsOrigin "*"
+```
+
+3. Verify health and data:
+
+```bash
+curl http://localhost:4010/health
+curl http://localhost:4010/api/overview
+curl http://localhost:4010/api/chains
+```
+
+Expected checks:
+
+- `/health` returns `ok: true`
+- `/health` includes the active store and overview counts
+- `/api/overview` shows non-zero snapshots after a successful worker run
+- `/api/chains` returns at least one chain when snapshots exist
+
+4. Start the minimal web app:
+
+```bash
+yarn monitor-web
+```
+
+Then open `http://localhost:4020`.
+
 ### Notion Integration
 
 When `--writeToNotion` is enabled, the monitor will:
