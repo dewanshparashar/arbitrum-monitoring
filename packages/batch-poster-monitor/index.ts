@@ -639,7 +639,7 @@ const isAnyTrust = async (
   }
 }
 
-const runBatchPosterMonitorForChain = async (
+export const runBatchPosterMonitorForChain = async (
   childChainInformation: ChainInfo
 ): Promise<BatchPosterMonitorResult> => {
   const startedAt = Date.now()

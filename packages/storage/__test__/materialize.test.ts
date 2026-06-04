@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import { MonitorRunResult } from 'monitor-core'
 import {
   MONITOR_RETENTION_DAYS,
+  SqliteMonitorStore,
   createLatestSnapshotId,
   createMonitorRunId,
   getRetentionCutoff,
@@ -192,5 +193,44 @@ describe('materializeMonitorResult', () => {
         limit: 14,
       }).params
     ).toEqual(['retryable', 421614, 0, 14])
+  })
+
+  test('persists and reads monitor rows through sqlite', () => {
+    const store = new SqliteMonitorStore(':memory:')
+    const result: MonitorRunResult = {
+      monitor: 'batch-poster',
+      chainId: 42170,
+      chainName: 'Arbitrum Nova',
+      startedAt: 100,
+      finishedAt: 200,
+      status: 'ok',
+      observations: [],
+      metrics: [],
+      findings: [],
+    }
+
+    store.initialize()
+    store.persistResult(result)
+
+    expect(store.readRun(createMonitorRunId(result))).toMatchObject({
+      id: createMonitorRunId(result),
+      monitor: 'batch-poster',
+      chain_id: 42170,
+      chain_name: 'Arbitrum Nova',
+    })
+    expect(store.readLatestSnapshot('batch-poster', 42170)).toMatchObject({
+      id: createLatestSnapshotId('batch-poster', 42170),
+      run_id: createMonitorRunId(result),
+      status: 'ok',
+    })
+    expect(
+      store.readMonitorHistory({
+        monitor: 'batch-poster',
+        chainId: 42170,
+        since: 0,
+      })
+    ).toHaveLength(1)
+
+    store.close()
   })
 })
