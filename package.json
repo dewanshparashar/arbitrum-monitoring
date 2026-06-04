@@ -11,6 +11,7 @@
     "batch-poster-monitor": "yarn workspace batch-poster-monitor dev",
     "assertion-monitor": "yarn workspace assertion-monitor dev",
     "monitor-worker": "yarn workspace monitor-worker dev",
+    "monitor-api": "yarn workspace monitor-api dev",
     "test": "yarn workspace utils build && vitest"
   },
   "devDependencies": {

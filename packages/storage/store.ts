@@ -11,6 +11,11 @@ export interface MonitorStore {
   initialize(): void | Promise<void>
   persistResult(result: MonitorRunResult): void | Promise<void>
   pruneOldRuns(now?: number, retentionDays?: number): number | Promise<number>
+  readLatestSnapshots(
+    monitor?: MonitorType
+  ):
+    | Record<string, unknown>[]
+    | Promise<Record<string, unknown>[]>
   readLatestSnapshot(
     monitor: MonitorType,
     chainId: number
@@ -21,5 +26,14 @@ export interface MonitorStore {
   readRun(
     runId: string
   ): Record<string, unknown> | Promise<Record<string, unknown> | undefined> | undefined
+  readRunObservations(
+    runId: string
+  ): Record<string, unknown>[] | Promise<Record<string, unknown>[]>
+  readRunMetrics(
+    runId: string
+  ): Record<string, unknown>[] | Promise<Record<string, unknown>[]>
+  readRunFindings(
+    runId: string
+  ): Record<string, unknown>[] | Promise<Record<string, unknown>[]>
   close(): void | Promise<void>
 }

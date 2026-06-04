@@ -7,8 +7,12 @@ import {
   insertRawMetricQuery,
   insertRawObservationQuery,
   selectLatestSnapshotQuery,
+  selectLatestSnapshotsQuery,
   selectMonitorHistoryQuery,
   selectRunDetailsQuery,
+  selectRunFindingsQuery,
+  selectRunMetricsQuery,
+  selectRunObservationsQuery,
   SqlQuery,
   upsertLatestSnapshotQuery,
 } from './queries'
@@ -73,12 +77,28 @@ export class SqliteMonitorStore implements MonitorStore {
     return this.get(selectLatestSnapshotQuery(monitor, chainId))
   }
 
+  readLatestSnapshots(monitor?: MonitorType) {
+    return this.all(selectLatestSnapshotsQuery(monitor))
+  }
+
   readMonitorHistory(params: MonitorHistoryParams) {
     return this.all(selectMonitorHistoryQuery(params))
   }
 
   readRun(runId: string) {
     return this.get(selectRunDetailsQuery(runId))
+  }
+
+  readRunObservations(runId: string) {
+    return this.all(selectRunObservationsQuery(runId))
+  }
+
+  readRunMetrics(runId: string) {
+    return this.all(selectRunMetricsQuery(runId))
+  }
+
+  readRunFindings(runId: string) {
+    return this.all(selectRunFindingsQuery(runId))
   }
 
   close() {
