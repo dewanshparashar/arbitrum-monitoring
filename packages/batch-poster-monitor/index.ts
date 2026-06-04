@@ -27,8 +27,19 @@ import {
   BATCH_POSTER_BALANCE_ALERT_THRESHOLD_FALLBACK,
   supportedCoreChainIds,
 } from './chains'
-import { BatchPosterMonitorOptions } from './types'
+import {
+  AnyTrustCheckResult,
+  BatchPosterBalanceStatus,
+  BatchPosterMonitorOptions,
+  BatchPosterMonitorResult,
+  BatchPosterMonitorSummary,
+} from './types'
 import { reportBatchPosterErrorToSlack } from './reportBatchPosterAlertToSlack'
+import {
+  buildBatchPosterFindings,
+  buildBatchPosterMonitorResult,
+  formatBatchPosterMonitorResult,
+} from './result'
 import {
   ChildNetwork as ChainInfo,
   DEFAULT_CONFIG_PATH,
@@ -337,23 +348,30 @@ const displaySummaryInformation = ({
 
 const allBatchedAlertsContent: string[] = []
 
-const showAlert = (childChainInformation: ChainInfo, reasons: string[]) => {
+const appendSequencerInboxReason = (
+  childChainInformation: ChainInfo,
+  reasons: string[]
+) => {
   const { PARENT_CHAIN_ADDRESS_PREFIX } = getExplorerUrlPrefixes(
     childChainInformation
   )
 
-  reasons
-    .reverse()
-    .push(
-      `SequencerInbox located at <${
-        PARENT_CHAIN_ADDRESS_PREFIX +
-        childChainInformation.ethBridge.sequencerInbox
-      }|${childChainInformation.ethBridge.sequencerInbox}> on [chain id ${
-        childChainInformation.parentChainId
-      }]`
-    )
+  return [
+    ...[...reasons].reverse(),
+    `SequencerInbox located at <${
+      PARENT_CHAIN_ADDRESS_PREFIX +
+      childChainInformation.ethBridge.sequencerInbox
+    }|${childChainInformation.ethBridge.sequencerInbox}> on [chain id ${
+      childChainInformation.parentChainId
+    }]`,
+  ]
+}
 
-  const reasonsString = reasons
+const showAlert = (childChainInformation: ChainInfo, reasons: string[]) => {
+  const reasonsString = appendSequencerInboxReason(
+    childChainInformation,
+    reasons
+  )
     .filter(reason => !!reason.trim().length)
     .join('\n• ')
 
@@ -419,11 +437,11 @@ const getBatchPosterAddress = async (
   }
 }
 
-const getBatchPosterLowBalanceAlertMessage = async (
+const getBatchPosterBalanceStatus = async (
   parentChainClient: PublicClient,
   childChainInformation: ChainInfo,
   sequencerInboxLogs: EventLogs
-) => {
+): Promise<BatchPosterBalanceStatus> => {
   const { PARENT_CHAIN_ADDRESS_PREFIX } = getExplorerUrlPrefixes(
     childChainInformation
   )
@@ -432,7 +450,7 @@ const getBatchPosterLowBalanceAlertMessage = async (
     parentChainClient,
     childChainInformation,
     sequencerInboxLogs
-  )
+  ) as `0x${string}`
   const currentBalance = await parentChainClient.getBalance({
     address: batchPoster,
   })
@@ -441,13 +459,20 @@ const getBatchPosterLowBalanceAlertMessage = async (
   if (sequencerInboxLogs.length === 0) {
     const bal = Number(formatEther(currentBalance))
     if (bal < BATCH_POSTER_BALANCE_ALERT_THRESHOLD_FALLBACK) {
-      return `Low Batch poster balance (<${
-        PARENT_CHAIN_ADDRESS_PREFIX + batchPoster
-      }|${batchPoster}>): ${formatEther(
-        currentBalance
-      )} ETH (Minimum expected balance: ${BATCH_POSTER_BALANCE_ALERT_THRESHOLD_FALLBACK} ETH). `
+      return {
+        batchPoster,
+        currentBalance,
+        message: `Low Batch poster balance (<${
+          PARENT_CHAIN_ADDRESS_PREFIX + batchPoster
+        }|${batchPoster}>): ${formatEther(
+          currentBalance
+        )} ETH (Minimum expected balance: ${BATCH_POSTER_BALANCE_ALERT_THRESHOLD_FALLBACK} ETH). `,
+      }
     }
-    return null
+    return {
+      batchPoster,
+      currentBalance,
+    }
   }
 
   // Dynamic balance check based on the logs
@@ -505,17 +530,22 @@ const getBatchPosterLowBalanceAlertMessage = async (
   // Return a warning message if low balance is detected
   const lowBalanceDetected = currentBalance < minimumExpectedBalance
 
-  if (lowBalanceDetected) {
-    return `Low Batch poster balance (<${
-      PARENT_CHAIN_ADDRESS_PREFIX + batchPoster
-    }|${batchPoster}>): ${formatEther(
-      currentBalance
-    )} ETH (Minimum expected balance: ${formatEther(
-      minimumExpectedBalance
-    )} ETH). The current balance is expected to last for ~${daysLeftForCurrentBalance} days only.`
+  return {
+    batchPoster,
+    currentBalance,
+    minimumExpectedBalance,
+    dailyPostingCostEstimate,
+    daysLeftForCurrentBalance,
+    message: lowBalanceDetected
+      ? `Low Batch poster balance (<${
+          PARENT_CHAIN_ADDRESS_PREFIX + batchPoster
+        }|${batchPoster}>): ${formatEther(
+          currentBalance
+        )} ETH (Minimum expected balance: ${formatEther(
+          minimumExpectedBalance
+        )} ETH). The current balance is expected to last for ~${daysLeftForCurrentBalance} days only.`
+      : undefined,
   }
-
-  return null
 }
 
 const checkForUserTransactionBlocks = async ({
@@ -609,9 +639,10 @@ const isAnyTrust = async (
   }
 }
 
-const monitorBatchPoster = async (childChainInformation: ChainInfo) => {
-  const alertsForChildChain: string[] = []
-
+const runBatchPosterMonitorForChain = async (
+  childChainInformation: ChainInfo
+): Promise<BatchPosterMonitorResult> => {
+  const startedAt = Date.now()
   const parentChain = getChainFromId(childChainInformation.parentChainId)
   const childChain = defineChain({
     id: childChainInformation.chainId,
@@ -669,16 +700,11 @@ const monitorBatchPoster = async (childChainInformation: ChainInfo) => {
     [] as Log<bigint, number, false, AbiEvent, true, readonly AbiEvent[]>[]
   )
 
-  // First, a basic check to get batch poster balance
-  const batchPosterLowBalanceMessage =
-    await getBatchPosterLowBalanceAlertMessage(
-      parentChainClient,
-      childChainInformation,
-      sequencerInboxLogs
-    )
-  if (batchPosterLowBalanceMessage) {
-    alertsForChildChain.push(batchPosterLowBalanceMessage)
-  }
+  const balanceStatus = await getBatchPosterBalanceStatus(
+    parentChainClient,
+    childChainInformation,
+    sequencerInboxLogs
+  )
 
   const batchPostingTimeBounds = await getBatchPostingTimeBounds(
     childChainInformation,
@@ -687,6 +713,15 @@ const monitorBatchPoster = async (childChainInformation: ChainInfo) => {
 
   // Get the last block of the chain
   const latestChildChainBlockNumber = await childChainClient.getBlockNumber()
+  const summary: BatchPosterMonitorSummary = {
+    latestParentBlockNumber: latestBlockNumber,
+    fromBlock,
+    toBlock,
+    sequencerInboxLogCount: sequencerInboxLogs.length,
+    batchPostingTimeBounds,
+    latestChildChainBlockNumber,
+    balanceStatus,
+  }
 
   if (!sequencerInboxLogs || sequencerInboxLogs.length === 0) {
     // get the last block that is 'safe' ie. can be assumed to have been posted
@@ -707,34 +742,26 @@ const monitorBatchPoster = async (childChainInformation: ChainInfo) => {
     const batchPostingBacklog =
       blocksPendingToBePosted > 0n && doPendingBlocksContainUserTransactions
 
-    // if alert situation
-    if (batchPostingBacklog) {
-      alertsForChildChain.push(
-        `No batch has been posted in the last ${
-          MAX_TIMEBOUNDS_SECONDS / 60 / 60
-        } hours, and last block number (${latestChildChainBlockNumber}) is greater than the last safe block number (${
-          latestChildChainSafeBlock.number
-        }). ${timeBoundsExpectedMessage(batchPostingTimeBounds)}`
-      )
+    summary.latestSafeBlockNumber = latestChildChainSafeBlock.number
+    summary.pendingBlocksToBePosted = blocksPendingToBePosted
+    summary.pendingBlocksContainUserTransactions =
+      doPendingBlocksContainUserTransactions
+    summary.batchPosterBacklog = batchPostingBacklog
+      ? blocksPendingToBePosted
+      : 0n
 
-      showAlert(childChainInformation, alertsForChildChain)
-    } else {
-      // if no alerting situation, just log the summary
-      console.log(
-        `**********\nBatch poster summary of [${childChainInformation.name}]`
-      )
-      console.log(
-        `No user activity in the last ${
-          MAX_TIMEBOUNDS_SECONDS / 60 / 60
-        } hours, and hence no batch has been posted.\n`
-      )
+    const findings = buildBatchPosterFindings({
+      chainInfo: childChainInformation,
+      summary,
+    })
 
-      // in this case show alert only if batch poster balance is low
-      if (batchPosterLowBalanceMessage) {
-        showAlert(childChainInformation, alertsForChildChain)
-      }
-    }
-    return
+    return buildBatchPosterMonitorResult({
+      chainInfo: childChainInformation,
+      summary,
+      findings,
+      startedAt,
+      finishedAt: Date.now(),
+    })
   }
 
   // Get the latest log
@@ -744,14 +771,14 @@ const monitorBatchPoster = async (childChainInformation: ChainInfo) => {
     childChainInformation,
     parentChainClient
   )
+  summary.isAnyTrust = isChainAnyTrust
 
   if (isChainAnyTrust) {
-    const alerts = await checkIfAnyTrustRevertedToPostDataOnChain({
+    summary.anyTrustCheck = await inspectAnyTrustBatchPosting({
       parentChainClient,
       childChainInformation,
       lastSequencerInboxLog,
     })
-    alertsForChildChain.push(...alerts)
   }
   // Get the timestamp of the block where that log was emitted
   const lastSequencerInboxBlock = await parentChainClient.getBlock({
@@ -772,37 +799,72 @@ const monitorBatchPoster = async (childChainInformation: ChainInfo) => {
 
   // Get batch poster backlog
   const batchPosterBacklog = latestChildChainBlockNumber - lastBlockReported
+  summary.latestBatchPostedBlockNumber = lastSequencerInboxBlock.number
+  summary.secondsSinceLastBatchPoster = secondsSinceLastBatchPoster
+  summary.lastBlockReported = lastBlockReported
+  summary.batchPosterBacklog = batchPosterBacklog
 
-  // If there's backlog and last batch posted was 4 hours ago, send alert
-  if (
-    batchPosterBacklog > 0 &&
-    secondsSinceLastBatchPoster > BigInt(batchPostingTimeBounds)
-  ) {
-    alertsForChildChain.push(
-      `Last batch was posted ${
-        secondsSinceLastBatchPoster / 60n / 60n
-      } hours and ${
-        (secondsSinceLastBatchPoster / 60n) % 60n
-      } mins ago, and there's a backlog of ${batchPosterBacklog} blocks in the chain. ${timeBoundsExpectedMessage(
-        batchPostingTimeBounds
-      )}`
-    )
+  const findings = buildBatchPosterFindings({
+    chainInfo: childChainInformation,
+    summary,
+  })
+
+  return buildBatchPosterMonitorResult({
+    chainInfo: childChainInformation,
+    summary,
+    findings,
+    startedAt,
+    finishedAt: Date.now(),
+  })
+}
+
+const monitorBatchPoster = async (childChainInformation: ChainInfo) => {
+  const result = await runBatchPosterMonitorForChain(childChainInformation)
+  const reasons = result.findings.map(f => f.message)
+
+  if (reasons.length > 0) {
+    showAlert(childChainInformation, reasons)
+    return result
   }
 
-  if (alertsForChildChain.length > 0) {
-    showAlert(childChainInformation, alertsForChildChain)
-    return
+  if (
+    result.metrics.find(metric => metric.key === 'latest_safe_block_number')
+      ?.value !== null
+  ) {
+    console.log(
+      `**********\nBatch poster summary of [${childChainInformation.name}]`
+    )
+    console.log(
+      `No user activity in the last ${
+        MAX_TIMEBOUNDS_SECONDS / 60 / 60
+      } hours, and hence no batch has been posted.\n`
+    )
+    return result
   }
 
   displaySummaryInformation({
     childChainInformation,
-    lastBlockReported,
-    latestBatchPostedBlockNumber: lastSequencerInboxBlock.number,
-    latestBatchPostedSecondsAgo: secondsSinceLastBatchPoster,
-    latestChildChainBlockNumber,
-    batchPosterBacklogSize: batchPosterBacklog,
-    batchPostingTimeBounds,
+    lastBlockReported: result.metrics.find(
+      metric => metric.key === 'last_block_reported'
+    )?.value as bigint,
+    latestBatchPostedBlockNumber: result.observations.find(
+      observation => observation.kind === 'batch-poster-latest-batch'
+    )?.data.latestBatchPostedBlockNumber as bigint,
+    latestBatchPostedSecondsAgo: result.metrics.find(
+      metric => metric.key === 'seconds_since_last_batch'
+    )?.value as bigint,
+    latestChildChainBlockNumber: result.metrics.find(
+      metric => metric.key === 'latest_child_block_number'
+    )?.value as bigint,
+    batchPosterBacklogSize: result.metrics.find(
+      metric => metric.key === 'batch_poster_backlog_blocks'
+    )?.value as bigint,
+    batchPostingTimeBounds: result.metrics.find(
+      metric => metric.key === 'batch_posting_timebounds_seconds'
+    )?.value as number,
   })
+
+  return result
 }
 
 const main = async () => {
@@ -867,7 +929,7 @@ const main = async () => {
   }
 }
 
-const checkIfAnyTrustRevertedToPostDataOnChain = async ({
+const inspectAnyTrustBatchPosting = async ({
   parentChainClient,
   childChainInformation,
   lastSequencerInboxLog,
@@ -877,27 +939,30 @@ const checkIfAnyTrustRevertedToPostDataOnChain = async ({
   lastSequencerInboxLog:
     | Log<bigint, number, false, AbiEvent, undefined, [AbiEvent], string>
     | undefined
-}): Promise<string[]> => {
+}): Promise<AnyTrustCheckResult> => {
   const alerts: string[] = []
+  const result: AnyTrustCheckResult = { alerts }
 
   try {
     // Get the transaction that emitted `lastSequencerInboxLog`
     const transaction = await parentChainClient.getTransaction({
       hash: lastSequencerInboxLog?.transactionHash as `0x${string}`,
     })
+    result.transactionHash = transaction.hash
 
     // Check if this function selector should be ignored
     const functionSelector = transaction.input.slice(0, 10) // 0x + 8 chars
+    result.functionSelector = functionSelector
     if (
       shouldIgnoreFunctionSelector(
         childChainInformation.chainId,
         functionSelector
       )
-    ) {
+      ) {
       console.log(
         `Chain [${childChainInformation.name}]: Ignoring transaction with function selector ${functionSelector}`
       )
-      return alerts
+      return result
     }
 
     const { args } = decodeFunctionData({
@@ -910,6 +975,7 @@ const checkIfAnyTrustRevertedToPostDataOnChain = async ({
 
     // Check the first byte of the data
     const firstByte = batchData.slice(0, 4)
+    result.dataFirstByte = firstByte
 
     if (firstByte === '0x00') {
       alerts.push(
@@ -930,7 +996,18 @@ const checkIfAnyTrustRevertedToPostDataOnChain = async ({
     alerts.push(errorMsg)
   }
 
-  return alerts
+  return result
+}
+
+const checkIfAnyTrustRevertedToPostDataOnChain = async (params: {
+  parentChainClient: PublicClient
+  childChainInformation: ChainInfo
+  lastSequencerInboxLog:
+    | Log<bigint, number, false, AbiEvent, undefined, [AbiEvent], string>
+    | undefined
+}): Promise<string[]> => {
+  const result = await inspectAnyTrustBatchPosting(params)
+  return result.alerts
 }
 
 // Export for testing
