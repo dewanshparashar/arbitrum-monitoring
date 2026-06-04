@@ -39,6 +39,12 @@ The fastest MVP path is:
 
 Supabase Postgres fits the database role well. The worker should still run as a normal process, not as a serverless job.
 
+For hosted MVP deployment:
+
+- Vercel can host `monitor-web` and the read-only API
+- Supabase Postgres can back both the API and worker
+- the worker should stay off Vercel
+
 ## Configuration
 
 ### Chain Configuration
@@ -175,6 +181,36 @@ Default local URLs:
 
 - web: `http://localhost:4020`
 - api: `http://localhost:4010`
+
+## Vercel + Supabase
+
+This repo includes a Vercel adapter:
+
+- static output from `packages/monitor-web/dist`
+- a single Vercel function at `api/v1.ts`
+- rewrites from `/api/*` and `/health` into that function
+
+Recommended database URLs:
+
+- Vercel API: use the Supabase transaction pooler URL
+- long-running worker: use the Supabase direct URL or session pooler URL
+
+Vercel project settings:
+
+- Root Directory: repository root
+- Build Command: from `vercel.json`
+- Output Directory: from `vercel.json`
+
+Vercel environment variables:
+
+- `POSTGRES_URL`
+- optional `MONITOR_DB_PATH` if you want SQLite fallback in non-production environments
+
+The worker deployment still needs:
+
+- `POSTGRES_URL`
+- `MONITOR_CONFIG_PATH`
+- access to `config.json`
 
 ### Notion Integration
 
