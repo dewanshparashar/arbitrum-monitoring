@@ -7,8 +7,12 @@ import {
   insertRawMetricQuery,
   insertRawObservationQuery,
   selectLatestSnapshotQuery,
+  selectLatestSnapshotsQuery,
   selectMonitorHistoryQuery,
   selectRunDetailsQuery,
+  selectRunFindingsQuery,
+  selectRunMetricsQuery,
+  selectRunObservationsQuery,
   upsertLatestSnapshotQuery,
 } from './queries'
 import {
@@ -88,6 +92,13 @@ export class PostgresMonitorStore implements MonitorStore {
     return result.rows[0]
   }
 
+  async readLatestSnapshots(monitor?: MonitorType) {
+    const result = await this.pool.query(
+      toPostgresQuery(selectLatestSnapshotsQuery(monitor))
+    )
+    return result.rows
+  }
+
   async readMonitorHistory(params: MonitorHistoryParams) {
     const result = await this.pool.query(
       toPostgresQuery(selectMonitorHistoryQuery(params))
@@ -100,6 +111,27 @@ export class PostgresMonitorStore implements MonitorStore {
       toPostgresQuery(selectRunDetailsQuery(runId))
     )
     return result.rows[0]
+  }
+
+  async readRunObservations(runId: string) {
+    const result = await this.pool.query(
+      toPostgresQuery(selectRunObservationsQuery(runId))
+    )
+    return result.rows
+  }
+
+  async readRunMetrics(runId: string) {
+    const result = await this.pool.query(
+      toPostgresQuery(selectRunMetricsQuery(runId))
+    )
+    return result.rows
+  }
+
+  async readRunFindings(runId: string) {
+    const result = await this.pool.query(
+      toPostgresQuery(selectRunFindingsQuery(runId))
+    )
+    return result.rows
   }
 
   async close() {

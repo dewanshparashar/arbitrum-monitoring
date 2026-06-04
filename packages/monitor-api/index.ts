@@ -1,0 +1,74 @@
+import { createServer, IncomingMessage, ServerResponse } from 'node:http'
+import yargs from 'yargs'
+import {
+  createMonitorStore,
+  inferMonitorStoreVendor,
+  MonitorStore,
+} from 'storage'
+import { handleApiRequest } from './routes'
+
+export const getApiConfig = () =>
+  yargs(process.argv.slice(2))
+    .options({
+      host: { type: 'string', default: '0.0.0.0' },
+      port: { type: 'number', default: 4010 },
+      dbPath: { type: 'string', default: 'monitoring.sqlite' },
+      postgresUrl: { type: 'string' },
+    })
+    .strict()
+    .parseSync()
+
+const writeJson = (
+  response: ServerResponse,
+  status: number,
+  body: unknown
+) => {
+  response.statusCode = status
+  response.setHeader('content-type', 'application/json')
+  response.end(JSON.stringify(body))
+}
+
+export const createApiServer = (store: MonitorStore) =>
+  createServer(async (request: IncomingMessage, response: ServerResponse) => {
+    const url = new URL(request.url || '/', 'http://localhost')
+    const apiResponse = await handleApiRequest({
+      method: request.method || 'GET',
+      pathname: url.pathname,
+      searchParams: url.searchParams,
+      store,
+    })
+
+    writeJson(response, apiResponse.status, apiResponse.body)
+  })
+
+export const main = async () => {
+  const options = getApiConfig()
+  const store = createMonitorStore({
+    vendor: inferMonitorStoreVendor({
+      postgresUrl: options.postgresUrl,
+      sqlitePath: options.dbPath,
+    }),
+    sqlitePath: options.dbPath,
+    postgresUrl: options.postgresUrl,
+  })
+
+  await store.initialize()
+  const server = createApiServer(store)
+
+  server.listen(options.port, options.host, () => {
+    console.log(`monitor-api listening on http://${options.host}:${options.port}`)
+  })
+
+  const close = async () => {
+    server.close()
+    await store.close()
+  }
+
+  process.on('SIGINT', () => {
+    close().then(() => process.exit(0))
+  })
+
+  process.on('SIGTERM', () => {
+    close().then(() => process.exit(0))
+  })
+}

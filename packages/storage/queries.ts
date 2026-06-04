@@ -128,6 +128,16 @@ export const selectLatestSnapshotQuery = (
   params: [monitor, chainId],
 })
 
+export const selectLatestSnapshotsQuery = (monitor?: string): SqlQuery => ({
+  sql: `
+    SELECT *
+    FROM latest_snapshots
+    ${monitor ? 'WHERE monitor = ?' : ''}
+    ORDER BY chain_name ASC, monitor ASC;
+  `,
+  params: monitor ? [monitor] : [],
+})
+
 export const selectMonitorHistoryQuery = ({
   monitor,
   chainId,
@@ -154,6 +164,36 @@ export const selectRunDetailsQuery = (runId: string): SqlQuery => ({
     SELECT *
     FROM monitor_runs
     WHERE id = ?;
+  `,
+  params: [runId],
+})
+
+export const selectRunObservationsQuery = (runId: string): SqlQuery => ({
+  sql: `
+    SELECT *
+    FROM raw_observations
+    WHERE run_id = ?
+    ORDER BY observed_at ASC, id ASC;
+  `,
+  params: [runId],
+})
+
+export const selectRunMetricsQuery = (runId: string): SqlQuery => ({
+  sql: `
+    SELECT *
+    FROM raw_metrics
+    WHERE run_id = ?
+    ORDER BY observed_at ASC, key ASC;
+  `,
+  params: [runId],
+})
+
+export const selectRunFindingsQuery = (runId: string): SqlQuery => ({
+  sql: `
+    SELECT *
+    FROM derived_findings
+    WHERE run_id = ?
+    ORDER BY severity DESC, code ASC, id ASC;
   `,
   params: [runId],
 })
