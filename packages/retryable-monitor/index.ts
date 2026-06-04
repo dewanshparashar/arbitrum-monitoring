@@ -1,47 +1,30 @@
-import * as fs from 'fs'
 import yargs from 'yargs'
-import winston from 'winston'
 import { providers } from 'ethers'
 import {
   getArbitrumNetwork,
   registerCustomArbitrumNetwork,
 } from '@arbitrum/sdk'
-import { FindRetryablesOptions } from './core/types'
-import { ChildNetwork, DEFAULT_CONFIG_PATH, getConfig } from 'utils'
 import {
-  checkRetryablesOneOff,
+  ChildNetwork,
+  DEFAULT_CONFIG_PATH,
+  getConfig,
+} from 'utils'
+import {
+  FindRetryablesOptions,
+  OnFailedRetryableFound,
+  OnRedeemedRetryableFound,
+  RetryableMonitorResult,
+} from './core/types'
+import {
   checkRetryablesContinuous,
+  checkRetryablesOneOff,
 } from './core/retryableCheckerMode'
-import { postSlackMessage } from './handlers/slack/postSlackMessage'
 import { alertUntriagedNotionRetryables } from './handlers/notion/alertUntriagedRetraybles'
 import { fetchNotionRetryables } from './handlers/notion/fetchedNotionRetryablesUtils'
 import { handleFailedRetryablesFound } from './handlers/handleFailedRetryablesFound'
 import { handleRedeemedRetryablesFound } from './handlers/handleRedeemedRetryablesFound'
-
-// Path for the log file
-const logFilePath = 'logfile.log'
-
-// Check if the log file exists, if not, create it
-try {
-  fs.accessSync(logFilePath)
-} catch (error) {
-  try {
-    fs.writeFileSync(logFilePath, '')
-    console.log(`Log file created: ${logFilePath}`)
-  } catch (createError) {
-    console.error(`Error creating log file: ${(createError as Error).message}`)
-    process.exit(1)
-  }
-}
-
-// Configure Winston logger
-const logger = winston.createLogger({
-  format: winston.format.simple(),
-  transports: [
-    new winston.transports.Console(),
-    new winston.transports.File({ filename: logFilePath }),
-  ],
-})
+import { postSlackMessage } from './handlers/slack/postSlackMessage'
+import { buildRetryableMonitorResult } from './result'
 
 const networkIsRegistered = (networkId: number) => {
   try {
@@ -52,30 +35,97 @@ const networkIsRegistered = (networkId: number) => {
   }
 }
 
-// Parsing command line arguments using yargs
-const options: FindRetryablesOptions = yargs(process.argv.slice(2))
-  .options({
-    fromBlock: { type: 'number', default: 0 },
-    toBlock: { type: 'number', default: 0 },
-    continuous: { type: 'boolean', default: false },
-    configPath: { type: 'string', default: DEFAULT_CONFIG_PATH },
-    enableAlerting: { type: 'boolean', default: false },
-    writeToNotion: { type: 'boolean', default: false },
-    autoRedeem: { type: 'boolean', default: false },
-  })
-  .strict()
-  .parseSync() as FindRetryablesOptions
+export const getMonitorConfig = (configPath = DEFAULT_CONFIG_PATH) => {
+  const options = yargs(process.argv.slice(2))
+    .options({
+      fromBlock: { type: 'number', default: 0 },
+      toBlock: { type: 'number', default: 0 },
+      continuous: { type: 'boolean', default: false },
+      configPath: { type: 'string', default: configPath },
+      enableAlerting: { type: 'boolean', default: false },
+      writeToNotion: { type: 'boolean', default: false },
+      autoRedeem: { type: 'boolean', default: false },
+    })
+    .strict()
+    .parseSync() as FindRetryablesOptions
 
-if (options.autoRedeem && !options.writeToNotion) {
-  console.warn(
-    '[retryable-monitor] --autoRedeem has no effect unless the Notion sweep runs. ' +
-      'You can enable it with --writeToNotion.'
-  )
+  if (options.autoRedeem && !options.writeToNotion) {
+    console.warn(
+      '[retryable-monitor] --autoRedeem has no effect unless the Notion sweep runs. ' +
+        'You can enable it with --writeToNotion.'
+    )
+  }
+
+  return {
+    config: getConfig({ configPath: options.configPath }),
+    options,
+  }
 }
 
-const config = getConfig({ configPath: options.configPath })
+const getHandlers = (
+  writeToNotion: boolean
+): {
+  onFailedRetryableFound: OnFailedRetryableFound
+  onRedeemedRetryableFound: OnRedeemedRetryableFound
+} => ({
+  onFailedRetryableFound: async ticket => {
+    await handleFailedRetryablesFound(ticket, writeToNotion)
+  },
+  onRedeemedRetryableFound: async ticket => {
+    await handleRedeemedRetryablesFound(ticket, writeToNotion)
+  },
+})
 
-// Function to process a child chain and check for retryable transactions
+const getTicketCount = (result: RetryableMonitorResult) => {
+  const metric = result.metrics.find(item => item.key === 'tickets_total')
+  return typeof metric?.value === 'number' ? metric.value : 0
+}
+
+export const formatRetryableMonitorResult = (
+  result: RetryableMonitorResult
+) => `${result.chainName}:\n- ${result.findings.map(f => f.message).join('\n- ')}`
+
+export const runRetryableMonitorForChain = async ({
+  parentChainProvider,
+  childChainProvider,
+  childChain,
+  fromBlock,
+  toBlock,
+  enableAlerting,
+  writeToNotion,
+}: {
+  parentChainProvider: providers.Provider
+  childChainProvider: providers.Provider
+  childChain: ChildNetwork
+  fromBlock: number
+  toBlock: number
+  enableAlerting: boolean
+  writeToNotion: boolean
+}): Promise<RetryableMonitorResult> => {
+  const startedAt = Date.now()
+  const { onFailedRetryableFound, onRedeemedRetryableFound } =
+    getHandlers(writeToNotion)
+  const result = await checkRetryablesOneOff({
+    parentChainProvider,
+    childChainProvider,
+    childChain,
+    fromBlock,
+    toBlock,
+    enableAlerting,
+    onFailedRetryableFound,
+    onRedeemedRetryableFound,
+  })
+
+  return buildRetryableMonitorResult({
+    childChain,
+    tickets: result.tickets,
+    fromBlock: result.fromBlock,
+    toBlock: result.toBlock,
+    startedAt,
+    finishedAt: Date.now(),
+  })
+}
+
 const processChildChain = async (
   parentChainProvider: providers.Provider,
   childChainProvider: providers.Provider,
@@ -84,8 +134,13 @@ const processChildChain = async (
   toBlock: number,
   enableAlerting: boolean,
   continuous: boolean,
-  writeToNotion: boolean
+  writeToNotion: boolean,
+  autoRedeem: boolean,
+  childChains: ChildNetwork[]
 ) => {
+  const { onFailedRetryableFound, onRedeemedRetryableFound } =
+    getHandlers(writeToNotion)
+
   if (continuous) {
     console.log('Activating continuous check for retryables...')
     await checkRetryablesContinuous({
@@ -96,50 +151,41 @@ const processChildChain = async (
       toBlock,
       enableAlerting,
       continuous,
-      onFailedRetryableFound: async ticket => {
-        await handleFailedRetryablesFound(ticket, writeToNotion)
-      },
-      onRedeemedRetryableFound: async ticket => {
-        await handleRedeemedRetryablesFound(ticket, writeToNotion)
-      },
+      onFailedRetryableFound,
+      onRedeemedRetryableFound,
     })
 
-    // todo: get closure on this - will it even be called
     if (writeToNotion) {
       console.log('Activating continuous sweep of Notion database...')
       setInterval(async () => {
-        await alertUntriagedNotionRetryables(
-          config.childChains,
-          options.autoRedeem
-        )
-      }, 1000 * 60 * 60) // Run every hour
+        await alertUntriagedNotionRetryables(childChains, autoRedeem)
+      }, 1000 * 60 * 60)
     }
-  } else {
-    console.log('Activating one-off check for retryables...')
-    const retryablesFound = await checkRetryablesOneOff({
-      parentChainProvider,
-      childChainProvider,
-      childChain,
-      fromBlock,
-      toBlock,
-      enableAlerting,
-      onFailedRetryableFound: async ticket => {
-        await handleFailedRetryablesFound(ticket, writeToNotion)
-      },
-      onRedeemedRetryableFound: async ticket => {
-        await handleRedeemedRetryablesFound(ticket, writeToNotion)
-      },
-    })
 
-    if (retryablesFound === 0) {
-      console.log('No retryables found in the specified block range.')
-    }
+    return
   }
+
+  console.log('Activating one-off check for retryables...')
+  const result = await runRetryableMonitorForChain({
+    parentChainProvider,
+    childChainProvider,
+    childChain,
+    fromBlock,
+    toBlock,
+    enableAlerting,
+    writeToNotion,
+  })
+
+  if (getTicketCount(result) === 0) {
+    console.log('No retryables found in the specified block range.')
+  }
+
+  return result
 }
 
-// Function to process multiple child chains concurrently
-const processOrbitChainsConcurrently = async () => {
-  // log the chains being processed for better debugging in github actions
+export const processOrbitChainsConcurrently = async () => {
+  const { config, options } = getMonitorConfig()
+
   console.log(
     '>>>>>> Processing child chains: ',
     config.childChains.map((childChain: ChildNetwork) => ({
@@ -150,9 +196,6 @@ const processOrbitChainsConcurrently = async () => {
     }))
   )
 
-  // Fetch the list of existing Notion retryables once before any chain
-  // processing so the redeemed-retryable handler can short-circuit the common
-  // case (redeemed tickets that were never logged to Notion).
   if (options.writeToNotion) {
     await fetchNotionRetryables()
   }
@@ -178,27 +221,38 @@ const processOrbitChainsConcurrently = async () => {
         options.toBlock,
         options.enableAlerting,
         options.continuous,
-        options.writeToNotion
+        options.writeToNotion,
+        !!options.autoRedeem,
+        config.childChains
       )
     } catch (e) {
-      const errorStr = `Retryable monitor - Error processing chain [${childChain.name}]: ${e.message}`
+      const error = e as Error
+      const errorStr = `Retryable monitor - Error processing chain [${childChain.name}]: ${error.message}`
       if (options.enableAlerting) {
-        postSlackMessage({
-          message: errorStr,
-        })
+        await postSlackMessage({ message: errorStr })
       }
       console.error(errorStr)
+      return
     }
   })
 
-  // keep running the script until we get resolution (success or error) for all the chains
   await Promise.allSettled(promises)
 
-  // once we process all the chains go through the Notion database once to alert on any `Unresolved` tickets found
   if (options.writeToNotion) {
-    await alertUntriagedNotionRetryables(config.childChains, options.autoRedeem)
+    await alertUntriagedNotionRetryables(
+      config.childChains,
+      !!options.autoRedeem
+    )
   }
 }
 
-// Start processing child chains concurrently
-processOrbitChainsConcurrently()
+export const main = async () => {
+  await processOrbitChainsConcurrently()
+}
+
+if (require.main === module) {
+  main().catch(error => {
+    console.error(error)
+    process.exit(1)
+  })
+}

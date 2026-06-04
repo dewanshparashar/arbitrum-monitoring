@@ -17,7 +17,11 @@ import {
   getChildChainRetryableReport,
 } from './reportGenerator'
 import { getExplorerUrlPrefixes } from 'utils'
-import { OnFailedRetryableFound, OnRedeemedRetryableFound } from './types'
+import {
+  ObservedRetryableTicket,
+  OnFailedRetryableFound,
+  OnRedeemedRetryableFound,
+} from './types'
 import { getTokenDepositData } from './tokenDataFetcher'
 import { SEVEN_DAYS_IN_SECONDS } from '@arbitrum/sdk/dist/lib/dataEntities/constants'
 
@@ -31,8 +35,8 @@ export const checkRetryables = async (
   enableAlerting: boolean,
   onFailedRetryableFound?: OnFailedRetryableFound,
   onRedeemedRetryableFound?: OnRedeemedRetryableFound
-): Promise<boolean> => {
-  let retryablesFound = false
+): Promise<ObservedRetryableTicket[]> => {
+  const observedTickets: ObservedRetryableTicket[] = []
 
   const messageDeliveredLogs = await getMessageDeliveredEventData(
     bridgeAddress,
@@ -87,13 +91,29 @@ export const checkRetryables = async (
       for (let msgIndex = 0; msgIndex < retryables.length; msgIndex++) {
         const retryableMessage = retryables[msgIndex]
         const retryableTicketId = retryableMessage.retryableCreationId
-        let status = await retryableMessage.status()
+        const status = await retryableMessage.status()
+        const parentChainRetryableReport = getParentChainRetryableReport(
+          arbParentTxReceipt,
+          retryableMessage
+        )
+        const childTxUrl = `${CHILD_CHAIN_TX_PREFIX}${retryableTicketId}`
 
         // if we find a successful Retryable, call `onRedeemedRetryableFound()`
         if (status === ParentToChildMessageStatus.REDEEMED) {
+          observedTickets.push({
+            parentChainRetryableReport,
+            childChain,
+            status: ParentToChildMessageStatus[status],
+            parentTxHash,
+            childTxHash: retryableTicketId,
+            parentTxUrl: `${PARENT_CHAIN_TX_PREFIX}${parentTxHash}`,
+            childTxUrl,
+            receiptFound: true,
+          })
+
           if (enableAlerting && onRedeemedRetryableFound) {
             await onRedeemedRetryableFound({
-              ChildTx: `${CHILD_CHAIN_TX_PREFIX}${retryableMessage.retryableCreationId}`,
+              ChildTx: childTxUrl,
               ParentTx: parentTxHash,
               ParentTxUrl: `${PARENT_CHAIN_TX_PREFIX}${parentTxHash}`, 
               createdAt: Date.now(), // fallback; won't overwrite real one
@@ -123,22 +143,29 @@ export const checkRetryables = async (
             )
 
           if (!childChainTxReceipt) {
+            observedTickets.push({
+              parentChainRetryableReport,
+              childChain,
+              status: ParentToChildMessageStatus[status],
+              parentTxHash,
+              childTxHash: retryableTicketId,
+              parentTxUrl: `${PARENT_CHAIN_TX_PREFIX}${parentTxHash}`,
+              childTxUrl,
+              receiptFound: false,
+            })
+
             // if child-chain tx is very recent, the tx receipt might not be found yet
             // if not handled, this will result in `undefined` error while trying to extract retryable details
             console.log(
               `${msgIndex + 1}. ${
                 ParentToChildMessageStatus[status]
               }:\nChildChainTxHash: ${
-                CHILD_CHAIN_TX_PREFIX + retryableTicketId
+                childTxUrl
               } (Receipt not found yet)`
             )
             continue
           }
 
-          const parentChainRetryableReport = getParentChainRetryableReport(
-            arbParentTxReceipt,
-            retryableMessage
-          )
           const childChainRetryableReport = await getChildChainRetryableReport({
             retryableMessage,
             childChainTx,
@@ -160,6 +187,19 @@ export const checkRetryables = async (
             parentChainProvider,
           })
 
+          observedTickets.push({
+            parentChainRetryableReport,
+            childChainRetryableReport,
+            tokenDepositData,
+            childChain,
+            status: childChainRetryableReport.status,
+            parentTxHash,
+            childTxHash: retryableTicketId,
+            parentTxUrl: `${PARENT_CHAIN_TX_PREFIX}${parentTxHash}`,
+            childTxUrl,
+            receiptFound: true,
+          })
+
           // Call the provided callback if it exists
           if (enableAlerting && onFailedRetryableFound) {
             await onFailedRetryableFound({
@@ -175,15 +215,14 @@ export const checkRetryables = async (
         console.log(
           `${msgIndex + 1}. ${
             ParentToChildMessageStatus[status]
-          }:\nChildChainTxHash: ${CHILD_CHAIN_TX_PREFIX + retryableTicketId}`
+          }:\nChildChainTxHash: ${childTxUrl}`
         )
         console.log(
           '----------------------------------------------------------'
         )
       }
-      retryablesFound = true // Set to true if retryables are found
     }
   }
 
-  return retryablesFound
+  return observedTickets
 }

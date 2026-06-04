@@ -47,7 +47,7 @@ export const checkRetryablesOneOff = async ({
   enableAlerting,
   onFailedRetryableFound,
   onRedeemedRetryableFound,
-}: CheckRetryablesOneOffParams): Promise<number> => {
+}: CheckRetryablesOneOffParams) => {
   if (toBlock === 0) {
     try {
       const currentBlock = await parentChainProvider.getBlockNumber()
@@ -74,7 +74,7 @@ export const checkRetryablesOneOff = async ({
     }
   }
 
-  const retryablesFound = await processBlockRangeInChunks(
+  const tickets = await processBlockRangeInChunks(
     fromBlock,
     toBlock,
     MAX_BLOCKS_TO_PROCESS,
@@ -90,11 +90,16 @@ export const checkRetryablesOneOff = async ({
         onFailedRetryableFound,
         onRedeemedRetryableFound
       ),
-    (prev, next) => prev || next,
-    false
+    (prev, next) => prev.concat(next),
+    []
   )
 
-  return toBlock
+  return {
+    fromBlock,
+    toBlock,
+    lastBlockChecked: toBlock,
+    tickets,
+  }
 }
 
 export const checkRetryablesContinuous = async ({
@@ -114,7 +119,7 @@ export const checkRetryablesContinuous = async ({
 
   // Function to process blocks and check for retryables
   const processBlocks = async () => {
-    const lastBlockChecked = await checkRetryablesOneOff({
+    const { lastBlockChecked } = await checkRetryablesOneOff({
       parentChainProvider,
       childChainProvider,
       childChain,
