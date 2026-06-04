@@ -4,9 +4,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "dependencies": {
-    "monitor-core": "*"
+    "monitor-core": "*",
+    "pg": "^8.13.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.11.10",
     "vitest": "^3.0.5"
   },
   "scripts": {

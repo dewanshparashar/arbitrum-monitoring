@@ -166,6 +166,89 @@ export const sqliteSchemaStatements = [
   `,
 ]
 
+export const postgresSchemaStatements = [
+  `
+  CREATE TABLE IF NOT EXISTS monitor_runs (
+    id TEXT PRIMARY KEY,
+    monitor TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    chain_name TEXT NOT NULL,
+    started_at BIGINT NOT NULL,
+    finished_at BIGINT NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT,
+    meta_json TEXT
+  );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS raw_observations (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES monitor_runs(id) ON DELETE CASCADE,
+    monitor TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    observed_at BIGINT NOT NULL,
+    kind TEXT NOT NULL,
+    refs_json TEXT,
+    data_json TEXT NOT NULL
+  );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS raw_metrics (
+    run_id TEXT NOT NULL REFERENCES monitor_runs(id) ON DELETE CASCADE,
+    monitor TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    observed_at BIGINT NOT NULL,
+    key TEXT NOT NULL,
+    value_json TEXT NOT NULL,
+    unit TEXT,
+    data_json TEXT,
+    PRIMARY KEY (run_id, key, observed_at)
+  );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS derived_findings (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL REFERENCES monitor_runs(id) ON DELETE CASCADE,
+    monitor TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    code TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    observation_ids_json TEXT,
+    data_json TEXT
+  );
+  `,
+  `
+  CREATE TABLE IF NOT EXISTS latest_snapshots (
+    id TEXT PRIMARY KEY,
+    monitor TEXT NOT NULL,
+    chain_id INTEGER NOT NULL,
+    chain_name TEXT NOT NULL,
+    run_id TEXT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    status TEXT NOT NULL,
+    summary_json TEXT NOT NULL
+  );
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS monitor_runs_chain_monitor_finished_at_idx
+  ON monitor_runs (chain_id, monitor, finished_at DESC);
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS raw_observations_run_id_idx
+  ON raw_observations (run_id);
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS raw_metrics_run_id_idx
+  ON raw_metrics (run_id);
+  `,
+  `
+  CREATE INDEX IF NOT EXISTS derived_findings_run_id_idx
+  ON derived_findings (run_id);
+  `,
+]
+
 export const getRetentionCutoff = (
   now = Date.now(),
   retentionDays = MONITOR_RETENTION_DAYS
