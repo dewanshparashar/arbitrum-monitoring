@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arbitrum Monitor</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>Arbitrum Monitor</h1>
+          <p class="muted">Minimal MVP dashboard</p>
+        </div>
+        <form id="api-form" class="api-form">
+          <label>
+            API base URL
+            <input id="api-base" type="text" placeholder="http://localhost:4010" />
+          </label>
+          <button type="submit">Save</button>
+          <button id="refresh-button" type="button">Refresh</button>
+        </form>
+      </header>
+
+      <p id="status" class="status">Loading…</p>
+
+      <section class="panel">
+        <h2>Overview</h2>
+        <div id="overview"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Chains</h2>
+        <div id="chains"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Monitor detail</h2>
+        <div id="detail"></div>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
