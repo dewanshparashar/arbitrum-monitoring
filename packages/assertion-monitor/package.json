@@ -1,7 +1,8 @@
 {
   "name": "assertion-monitor",
   "version": "1.0.0",
-  "main": "dist/main.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "dependencies": {
     "@arbitrum/sdk": "^4.0.0",
     "@types/yargs": "17.0.32",

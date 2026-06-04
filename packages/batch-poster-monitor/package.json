@@ -1,7 +1,8 @@
 {
   "name": "batch-poster-monitor",
   "version": "1.0.0",
-  "main": "index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "lint": "eslint .",
     "build": "yarn workspace utils build && rm -rf ./dist && tsc",
