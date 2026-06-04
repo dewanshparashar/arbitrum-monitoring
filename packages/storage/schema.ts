@@ -171,7 +171,7 @@ export const postgresSchemaStatements = [
   CREATE TABLE IF NOT EXISTS monitor_runs (
     id TEXT PRIMARY KEY,
     monitor TEXT NOT NULL,
-    chain_id INTEGER NOT NULL,
+    chain_id BIGINT NOT NULL,
     chain_name TEXT NOT NULL,
     started_at BIGINT NOT NULL,
     finished_at BIGINT NOT NULL,
@@ -185,7 +185,7 @@ export const postgresSchemaStatements = [
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES monitor_runs(id) ON DELETE CASCADE,
     monitor TEXT NOT NULL,
-    chain_id INTEGER NOT NULL,
+    chain_id BIGINT NOT NULL,
     observed_at BIGINT NOT NULL,
     kind TEXT NOT NULL,
     refs_json TEXT,
@@ -196,7 +196,7 @@ export const postgresSchemaStatements = [
   CREATE TABLE IF NOT EXISTS raw_metrics (
     run_id TEXT NOT NULL REFERENCES monitor_runs(id) ON DELETE CASCADE,
     monitor TEXT NOT NULL,
-    chain_id INTEGER NOT NULL,
+    chain_id BIGINT NOT NULL,
     observed_at BIGINT NOT NULL,
     key TEXT NOT NULL,
     value_json TEXT NOT NULL,
@@ -210,7 +210,7 @@ export const postgresSchemaStatements = [
     id TEXT PRIMARY KEY,
     run_id TEXT NOT NULL REFERENCES monitor_runs(id) ON DELETE CASCADE,
     monitor TEXT NOT NULL,
-    chain_id INTEGER NOT NULL,
+    chain_id BIGINT NOT NULL,
     code TEXT NOT NULL,
     severity TEXT NOT NULL,
     title TEXT NOT NULL,
@@ -223,13 +223,33 @@ export const postgresSchemaStatements = [
   CREATE TABLE IF NOT EXISTS latest_snapshots (
     id TEXT PRIMARY KEY,
     monitor TEXT NOT NULL,
-    chain_id INTEGER NOT NULL,
+    chain_id BIGINT NOT NULL,
     chain_name TEXT NOT NULL,
     run_id TEXT NOT NULL,
     updated_at BIGINT NOT NULL,
     status TEXT NOT NULL,
     summary_json TEXT NOT NULL
   );
+  `,
+  `
+  ALTER TABLE monitor_runs
+  ALTER COLUMN chain_id TYPE BIGINT;
+  `,
+  `
+  ALTER TABLE raw_observations
+  ALTER COLUMN chain_id TYPE BIGINT;
+  `,
+  `
+  ALTER TABLE raw_metrics
+  ALTER COLUMN chain_id TYPE BIGINT;
+  `,
+  `
+  ALTER TABLE derived_findings
+  ALTER COLUMN chain_id TYPE BIGINT;
+  `,
+  `
+  ALTER TABLE latest_snapshots
+  ALTER COLUMN chain_id TYPE BIGINT;
   `,
   `
   CREATE INDEX IF NOT EXISTS monitor_runs_chain_monitor_finished_at_idx
