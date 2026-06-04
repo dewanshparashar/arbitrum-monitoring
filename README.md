@@ -212,6 +212,83 @@ The worker deployment still needs:
 - `MONITOR_CONFIG_PATH`
 - access to `config.json`
 
+## Hosted deployment
+
+Use this split for the fastest hosted MVP:
+
+- `Supabase`: Postgres
+- `Vercel`: `monitor-web` + read-only API
+- `Hetzner`: `monitor-worker`
+
+### 1. Supabase
+
+Create a Supabase project and keep these two connection strings:
+
+- `DATABASE_URL`: transaction pooler URL for Vercel
+- `DIRECT_URL`: direct or session-pooled URL for the worker
+
+### 2. Vercel
+
+Import the repository into Vercel.
+
+Project settings:
+
+- Root Directory: repository root
+- Build Command: use `vercel.json`
+- Output Directory: use `vercel.json`
+
+Environment variables:
+
+```bash
+POSTGRES_URL=<Supabase DATABASE_URL>
+```
+
+After deploy, verify:
+
+- `https://<your-vercel-app>/health`
+- `https://<your-vercel-app>/api/overview`
+
+Expected:
+
+- `/health` returns `ok: true`
+- `/api/overview` returns JSON
+
+### 3. Hetzner worker
+
+On the worker host, clone the repo and provide:
+
+```bash
+POSTGRES_URL=<Supabase DIRECT_URL>
+MONITOR_CONFIG_PATH=./config.json
+```
+
+Also provide:
+
+- repo-root `config.json`
+- any optional Slack / Notion env vars you need
+
+Then run:
+
+```bash
+yarn install
+yarn monitor-worker --once --postgresUrl "$POSTGRES_URL"
+```
+
+Once the first pass succeeds, run the worker continuously:
+
+```bash
+yarn monitor-worker --postgresUrl "$POSTGRES_URL"
+```
+
+### 4. Hosted smoke test
+
+After the worker has written data:
+
+1. Open the Vercel app
+2. Confirm `/health` returns non-zero overview counts
+3. Confirm `/api/chains` returns chain entries
+4. Confirm the web dashboard renders monitor rows
+
 ## Readiness checklist
 
 Use this sequence for a local or hosted MVP verification:
