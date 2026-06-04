@@ -198,6 +198,28 @@ describe('materializeMonitorResult', () => {
     ).toEqual(['retryable', 421614, 0, 14])
   })
 
+  test('supports large orbit chain ids in storage rows', () => {
+    const result: MonitorRunResult = {
+      monitor: 'batch-poster',
+      chainId: 37714555429,
+      chainName: 'Xai Testnet',
+      startedAt: 1,
+      finishedAt: 2,
+      status: 'ok',
+      observations: [],
+      metrics: [],
+      findings: [],
+    }
+
+    const rows = materializeMonitorResult(result)
+
+    expect(rows.run.chain_id).toBe(37714555429)
+    expect(insertMonitorRunQuery(rows.run).params[2]).toBe(37714555429)
+    expect(upsertLatestSnapshotQuery(rows.latest_snapshot).params[2]).toBe(
+      37714555429
+    )
+  })
+
   test('persists and reads monitor rows through sqlite', () => {
     const store = new SqliteMonitorStore(':memory:')
     const result: MonitorRunResult = {
