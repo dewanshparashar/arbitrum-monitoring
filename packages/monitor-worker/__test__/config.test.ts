@@ -138,6 +138,30 @@ describe('getWorkerConfig', () => {
     const result = await getWorkerConfig()
 
     expect(result.options.portalNetwork).toBe('all')
+    expect(result.options.monitors).toEqual([
+      'assertion',
+      'batch-poster',
+      'retryable',
+    ])
     expect(result.config.childChains).toHaveLength(2)
+  })
+
+  test('parses explicit monitor filters', async () => {
+    process.argv = ['node', 'worker', '--monitors', 'assertion,retryable']
+    process.env = {
+      ...originalEnv,
+      MONITOR_CONFIG_PATH: '',
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => portalSnapshot,
+      }))
+    )
+
+    const result = await getWorkerConfig()
+
+    expect(result.options.monitors).toEqual(['assertion', 'retryable'])
   })
 })

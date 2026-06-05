@@ -1,4 +1,5 @@
 import yargs from 'yargs'
+import { MonitorType } from 'monitor-core'
 import { ChildNetwork, getConfig } from 'utils'
 
 export const DEFAULT_PORTAL_CONFIG_URL =
@@ -34,6 +35,8 @@ type PortalSnapshot = {
   mainnet?: PortalChain[]
   testnet?: PortalChain[]
 }
+
+const MONITOR_TYPES: MonitorType[] = ['assertion', 'batch-poster', 'retryable']
 
 const parseOverrideMap = (name: string, value: string | undefined) => {
   if (!value) {
@@ -163,6 +166,29 @@ const asBoolean = (value: string | undefined, fallback: boolean) => {
   return value === 'true'
 }
 
+const parseMonitorTypes = (value: string | undefined) => {
+  if (!value) {
+    return MONITOR_TYPES
+  }
+
+  const types = value
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean)
+
+  if (types.length === 0) {
+    return MONITOR_TYPES
+  }
+
+  for (const type of types) {
+    if (!MONITOR_TYPES.includes(type as MonitorType)) {
+      throw new Error(`Unknown monitor type: ${type}`)
+    }
+  }
+
+  return types as MonitorType[]
+}
+
 export const getWorkerConfig = async () => {
   const options = yargs(process.argv.slice(2))
     .options({
@@ -192,6 +218,10 @@ export const getWorkerConfig = async () => {
         type: 'string',
         default: process.env.MONITOR_PARENT_EXPLORER_OVERRIDES,
       },
+      monitors: {
+        type: 'string',
+        default: process.env.MONITOR_WORKER_MONITORS,
+      },
       dbPath: {
         type: 'string',
         default: process.env.MONITOR_DB_PATH || 'monitoring.sqlite',
@@ -219,5 +249,11 @@ export const getWorkerConfig = async () => {
         parentExplorerOverrides: options.parentExplorerOverrides,
       })
 
-  return { config, options }
+  return {
+    config,
+    options: {
+      ...options,
+      monitors: parseMonitorTypes(options.monitors),
+    },
+  }
 }

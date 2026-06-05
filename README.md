@@ -125,6 +125,7 @@ The main MVP runtime variables are:
 - `POSTGRES_URL`
 - `MONITOR_PORTAL_CONFIG_URL`
 - `MONITOR_PORTAL_NETWORK`
+- `MONITOR_WORKER_MONITORS`
 - `MONITOR_API_PORT`
 - `MONITOR_API_CORS_ORIGIN`
 - `MONITOR_WORKER_POLL_INTERVAL_MS`
@@ -160,6 +161,9 @@ See individual monitor READMEs for specific options and features:
 ```bash
 # Worker
 yarn monitor-worker --postgresUrl "$POSTGRES_URL"
+
+# Worker for specific monitors
+yarn monitor-worker --once --monitors assertion,batch-poster --postgresUrl "$POSTGRES_URL"
 
 # Read API
 yarn monitor-api --postgresUrl "$POSTGRES_URL" --corsOrigin http://localhost:4020
@@ -259,6 +263,28 @@ Expected:
 
 - `/health` returns `ok: true`
 - `/api/overview` returns JSON
+
+### 2.5. GitHub Actions scheduler
+
+This repo includes three scheduled workflows on the default branch:
+
+- `.github/workflows/monitor-batch-poster.yml`
+- `.github/workflows/monitor-assertion.yml`
+- `.github/workflows/monitor-retryable.yml`
+
+They run `yarn monitor-worker --once` with explicit monitor filters and write directly to Postgres.
+
+GitHub repository secrets:
+
+- `MONITOR_POSTGRES_URL`
+- optional `MONITOR_CHAIN_RPC_OVERRIDES`
+- optional `MONITOR_PARENT_RPC_OVERRIDES`
+
+GitHub repository variables:
+
+- optional `MONITOR_PORTAL_CONFIG_URL`
+- optional `MONITOR_PORTAL_NETWORK`
+- optional `MONITOR_PARENT_EXPLORER_OVERRIDES`
 
 ### 3. Hetzner worker
 

@@ -1,0 +1,37 @@
+name: Monitor Assertions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '7,22,37,52 * * * *'
+
+concurrency:
+  group: monitor-assertion
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: yarn
+
+      - name: Install
+        run: yarn install --frozen-lockfile
+
+      - name: Run assertion worker
+        env:
+          POSTGRES_URL: ${{ secrets.MONITOR_POSTGRES_URL }}
+          MONITOR_PORTAL_CONFIG_URL: ${{ vars.MONITOR_PORTAL_CONFIG_URL }}
+          MONITOR_PORTAL_NETWORK: ${{ vars.MONITOR_PORTAL_NETWORK }}
+          MONITOR_CHAIN_RPC_OVERRIDES: ${{ secrets.MONITOR_CHAIN_RPC_OVERRIDES }}
+          MONITOR_PARENT_RPC_OVERRIDES: ${{ secrets.MONITOR_PARENT_RPC_OVERRIDES }}
+          MONITOR_PARENT_EXPLORER_OVERRIDES: ${{ vars.MONITOR_PARENT_EXPLORER_OVERRIDES }}
+        run: yarn monitor-worker --once --monitors assertion --postgresUrl "$POSTGRES_URL"

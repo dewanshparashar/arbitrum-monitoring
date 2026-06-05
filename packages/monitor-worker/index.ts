@@ -5,6 +5,9 @@ import { getWorkerConfig } from './config'
 
 export const main = async () => {
   const { config, options } = await getWorkerConfig()
+  const monitors = defaultMonitorExecutors.filter(monitor =>
+    options.monitors.includes(monitor.type)
+  )
   const store = createMonitorStore({
     vendor: inferMonitorStoreVendor({
       postgresUrl: options.postgresUrl,
@@ -19,7 +22,7 @@ export const main = async () => {
   try {
     await runWorkerLoop({
       childChains: config.childChains,
-      monitors: defaultMonitorExecutors,
+      monitors,
       store,
       loop: {
         once: options.once,
