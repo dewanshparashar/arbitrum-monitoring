@@ -13,7 +13,7 @@
     "monitor-worker": "yarn workspace monitor-worker dev",
     "monitor-api": "yarn workspace monitor-api dev",
     "monitor-web": "yarn workspace monitor-web dev",
-    "test": "yarn workspace utils build && vitest"
+    "test": "yarn workspace utils build && yarn workspace monitor-core build && yarn workspace storage build && vitest"
   },
   "devDependencies": {
     "@types/node": "^20.14.10",
