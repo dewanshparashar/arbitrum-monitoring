@@ -17,6 +17,7 @@ import {
 } from '@arbitrum/orbit-sdk'
 import {
   getChainFromId,
+  getBlockRangeForHours,
   getMaxBlockRange,
   getParentChainBlockTimeForBatchPosting,
   MAX_TIMEBOUNDS_SECONDS,
@@ -446,11 +447,11 @@ const getBatchPosterBalanceStatus = async (
     childChainInformation
   )
 
-  const batchPoster = await getBatchPosterAddress(
+  const batchPoster = (await getBatchPosterAddress(
     parentChainClient,
     childChainInformation,
     sequencerInboxLogs
-  ) as `0x${string}`
+  )) as `0x${string}`
   const currentBalance = await parentChainClient.getBalance({
     address: batchPoster,
   })
@@ -633,14 +634,17 @@ const isAnyTrust = async (
     })
   } catch (e: any) {
     console.warn(
-      `Warning: Failed to check AnyTrust status for chain [${childChainInformation.name}]: ${e?.message || e}`
+      `Warning: Failed to check AnyTrust status for chain [${
+        childChainInformation.name
+      }]: ${e?.message || e}`
     )
     return false
   }
 }
 
 export const runBatchPosterMonitorForChain = async (
-  childChainInformation: ChainInfo
+  childChainInformation: ChainInfo,
+  options?: { lookbackHours?: number }
 ): Promise<BatchPosterMonitorResult> => {
   const startedAt = Date.now()
   console.log(
@@ -675,7 +679,9 @@ export const runBatchPosterMonitorForChain = async (
     transport: http(childChainInformation.orbitRpcUrl),
   })
 
-  console.log(`[batch-poster] Resolving rollup for [${childChainInformation.name}]`)
+  console.log(
+    `[batch-poster] Resolving rollup for [${childChainInformation.name}]`
+  )
   childChainInformation.ethBridge.rollup = await resolveRollupAddress(
     parentChainClient,
     childChainInformation.ethBridge,
@@ -685,9 +691,11 @@ export const runBatchPosterMonitorForChain = async (
   // Getting sequencer inbox logs
   const latestBlockNumber = await parentChainClient.getBlockNumber()
 
-  const blocksToProcess = getMaxBlockRange(parentChain)
+  const blocksToProcess = options?.lookbackHours
+    ? getBlockRangeForHours(parentChain, options.lookbackHours)
+    : getMaxBlockRange(parentChain)
   const toBlock = latestBlockNumber
-  const fromBlock = toBlock - blocksToProcess
+  const fromBlock = toBlock > blocksToProcess ? toBlock - blocksToProcess : 0n
   console.log(
     `[batch-poster] [${childChainInformation.name}] scanning parent blocks ${fromBlock} to ${toBlock}`
   )
@@ -698,7 +706,8 @@ export const runBatchPosterMonitorForChain = async (
     2000,
     async (from, to) =>
       parentChainClient.getLogs({
-        address: childChainInformation.ethBridge.sequencerInbox as `0x${string}`,
+        address: childChainInformation.ethBridge
+          .sequencerInbox as `0x${string}`,
         event: sequencerBatchDeliveredEventAbi,
         fromBlock: BigInt(from),
         toBlock: BigInt(to),
@@ -716,7 +725,11 @@ export const runBatchPosterMonitorForChain = async (
     sequencerInboxLogs
   )
   console.log(
-    `[batch-poster] [${childChainInformation.name}] balance=${balanceStatus.currentBalance.toString()} message=${balanceStatus.message || 'none'}`
+    `[batch-poster] [${
+      childChainInformation.name
+    }] balance=${balanceStatus.currentBalance.toString()} message=${
+      balanceStatus.message || 'none'
+    }`
   )
 
   const batchPostingTimeBounds = await getBatchPostingTimeBounds(
@@ -768,7 +781,9 @@ export const runBatchPosterMonitorForChain = async (
       summary,
     })
     console.log(
-      `[batch-poster] Finished [${childChainInformation.name}] with ${findings.length} finding(s) in ${Date.now() - startedAt}ms`
+      `[batch-poster] Finished [${childChainInformation.name}] with ${
+        findings.length
+      } finding(s) in ${Date.now() - startedAt}ms`
     )
 
     return buildBatchPosterMonitorResult({
@@ -825,7 +840,9 @@ export const runBatchPosterMonitorForChain = async (
     summary,
   })
   console.log(
-    `[batch-poster] Finished [${childChainInformation.name}] with ${findings.length} finding(s) in ${Date.now() - startedAt}ms`
+    `[batch-poster] Finished [${childChainInformation.name}] with ${
+      findings.length
+    } finding(s) in ${Date.now() - startedAt}ms`
   )
 
   return buildBatchPosterMonitorResult({
@@ -977,7 +994,7 @@ const inspectAnyTrustBatchPosting = async ({
         childChainInformation.chainId,
         functionSelector
       )
-      ) {
+    ) {
       console.log(
         `Chain [${childChainInformation.name}]: Ignoring transaction with function selector ${functionSelector}`
       )

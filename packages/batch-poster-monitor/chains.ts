@@ -60,6 +60,26 @@ export const getMaxBlockRange = (chain: Chain): bigint => {
   return 0n
 }
 
+export const getBlockRangeForHours = (chain: Chain, hours: number): bigint => {
+  switch (chain) {
+    case mainnet:
+    case sepolia:
+    case holesky:
+      return BigInt(Math.ceil((hours * 60 * 60) / 12))
+
+    case base:
+    case baseSepolia:
+      return BigInt(Math.ceil((hours * 60 * 60) / 2))
+
+    case arbitrum:
+    case arbitrumNova:
+    case arbitrumSepolia:
+      return BigInt(Math.ceil(hours * 60 * 60 * 4))
+  }
+
+  return 0n
+}
+
 // this is different from simple `getParentChainBlockTime` in retryable-tracker because we need to fallback to Ethereum values no matter what the chain
 export const getParentChainBlockTimeForBatchPosting = (
   childChain: ChildNetwork

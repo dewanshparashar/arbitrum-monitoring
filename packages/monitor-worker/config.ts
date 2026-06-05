@@ -27,7 +27,10 @@ const DEFAULT_PARENT_EXPLORER_URLS: Record<number, string> = {
 
 type PortalNetwork = 'all' | 'mainnet' | 'testnet'
 
-type PortalChain = Omit<ChildNetwork, 'orbitRpcUrl' | 'parentRpcUrl' | 'parentExplorerUrl'> & {
+type PortalChain = Omit<
+  ChildNetwork,
+  'orbitRpcUrl' | 'parentRpcUrl' | 'parentExplorerUrl'
+> & {
   rpcUrl: string
 }
 
@@ -62,7 +65,9 @@ const parseOverrideMap = (name: string, value: string | undefined) => {
     )
   } catch (error) {
     throw new Error(
-      `Invalid ${name}: ${error instanceof Error ? error.message : 'unknown error'}`
+      `Invalid ${name}: ${
+        error instanceof Error ? error.message : 'unknown error'
+      }`
     )
   }
 }
@@ -189,6 +194,14 @@ const parseMonitorTypes = (value: string | undefined) => {
   return types as MonitorType[]
 }
 
+const parseLookbackHours = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) {
+    return undefined
+  }
+
+  return value
+}
+
 export const getWorkerConfig = async () => {
   const options = yargs(process.argv.slice(2))
     .options({
@@ -233,7 +246,13 @@ export const getWorkerConfig = async () => {
       },
       pollIntervalMs: {
         type: 'number',
-        default: Number(process.env.MONITOR_WORKER_POLL_INTERVAL_MS || 60 * 1000),
+        default: Number(
+          process.env.MONITOR_WORKER_POLL_INTERVAL_MS || 60 * 1000
+        ),
+      },
+      lookbackHours: {
+        type: 'number',
+        default: Number(process.env.MONITOR_LOOKBACK_HOURS || 0),
       },
     })
     .strict()
@@ -254,6 +273,7 @@ export const getWorkerConfig = async () => {
     options: {
       ...options,
       monitors: parseMonitorTypes(options.monitors),
+      lookbackHours: parseLookbackHours(options.lookbackHours),
     },
   }
 }

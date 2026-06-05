@@ -68,21 +68,26 @@ describe('runDueMonitors', () => {
       monitors,
       store,
       scheduleState,
+      runContext: { lookbackHours: 3 },
       logger,
       now: 1000,
     })
 
     expect(firstResults).toHaveLength(2)
-    expect(store.readMonitorHistory({
-      monitor: 'assertion',
-      chainId: 42161,
-      since: 0,
-    })).toHaveLength(1)
-    expect(store.readMonitorHistory({
-      monitor: 'retryable',
-      chainId: 42161,
-      since: 0,
-    })[0]).toMatchObject({
+    expect(
+      store.readMonitorHistory({
+        monitor: 'assertion',
+        chainId: 42161,
+        since: 0,
+      })
+    ).toHaveLength(1)
+    expect(
+      store.readMonitorHistory({
+        monitor: 'retryable',
+        chainId: 42161,
+        since: 0,
+      })[0]
+    ).toMatchObject({
       status: 'error',
       error: 'rpc timeout',
     })

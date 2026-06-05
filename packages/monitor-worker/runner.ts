@@ -1,7 +1,12 @@
 import { MonitorRunResult } from 'monitor-core'
 import { MonitorStore } from 'storage'
 import { ChildNetwork, sleep } from 'utils'
-import { MonitorExecutor, WorkerLoopOptions, WorkerScheduleState } from './types'
+import {
+  MonitorExecutor,
+  MonitorRunContext,
+  WorkerLoopOptions,
+  WorkerScheduleState,
+} from './types'
 
 const createErrorMonitorResult = ({
   type,
@@ -33,12 +38,13 @@ const createErrorMonitorResult = ({
 
 const runMonitorSafely = async (
   monitor: MonitorExecutor,
-  chain: ChildNetwork
+  chain: ChildNetwork,
+  context?: MonitorRunContext
 ) => {
   const startedAt = Date.now()
 
   try {
-    return await monitor.run(chain)
+    return await monitor.run(chain, context)
   } catch (error) {
     return createErrorMonitorResult({
       type: monitor.type,
@@ -63,6 +69,7 @@ export const runDueMonitors = async ({
   monitors,
   store,
   scheduleState,
+  runContext,
   logger = console,
   now = Date.now(),
 }: {
@@ -70,10 +77,13 @@ export const runDueMonitors = async ({
   monitors: MonitorExecutor[]
   store: MonitorStore
   scheduleState: WorkerScheduleState
+  runContext?: MonitorRunContext
   logger?: Pick<Console, 'log' | 'error'>
   now?: number
 }) => {
-  const dueMonitors = monitors.filter(monitor => isDue(monitor, scheduleState, now))
+  const dueMonitors = monitors.filter(monitor =>
+    isDue(monitor, scheduleState, now)
+  )
   const results: MonitorRunResult[] = []
 
   for (const monitor of dueMonitors) {
@@ -84,21 +94,27 @@ export const runDueMonitors = async ({
     for (const [index, chain] of childChains.entries()) {
       const chainStartedAt = Date.now()
       logger.log(
-        `[${monitor.type}] Starting [${chain.name}] (${chain.chainId}) ${index + 1}/${childChains.length}`
+        `[${monitor.type}] Starting [${chain.name}] (${chain.chainId}) ${
+          index + 1
+        }/${childChains.length}`
       )
-      const result = await runMonitorSafely(monitor, chain)
+      const result = await runMonitorSafely(monitor, chain, runContext)
       await store.persistResult(result)
       results.push(result)
 
       if (result.status === 'error') {
         logger.error(
-          `[${monitor.type}] Failed [${chain.name}] after ${Date.now() - chainStartedAt}ms: ${result.error}`
+          `[${monitor.type}] Failed [${chain.name}] after ${
+            Date.now() - chainStartedAt
+          }ms: ${result.error}`
         )
         continue
       }
 
       logger.log(
-        `[${monitor.type}] Finished [${chain.name}] with ${result.status} in ${Date.now() - chainStartedAt}ms`
+        `[${monitor.type}] Finished [${chain.name}] with ${result.status} in ${
+          Date.now() - chainStartedAt
+        }ms`
       )
     }
 
@@ -132,6 +148,9 @@ export const runWorkerLoop = async ({
       monitors,
       store,
       scheduleState,
+      runContext: {
+        lookbackHours: loop.lookbackHours,
+      },
       logger,
     })
 

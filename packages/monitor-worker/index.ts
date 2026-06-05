@@ -9,9 +9,13 @@ export const main = async () => {
     options.monitors.includes(monitor.type)
   )
   console.log(
-    `[worker] Starting run with store=${options.postgresUrl ? 'postgres' : 'sqlite'} once=${options.once} monitors=${monitors
-      .map(monitor => monitor.type)
-      .join(',')} chains=${config.childChains.length}`
+    `[worker] Starting run with store=${
+      options.postgresUrl ? 'postgres' : 'sqlite'
+    } once=${options.once} lookbackHours=${
+      options.lookbackHours ?? 'default'
+    } monitors=${monitors.map(monitor => monitor.type).join(',')} chains=${
+      config.childChains.length
+    }`
   )
   const store = createMonitorStore({
     vendor: inferMonitorStoreVendor({
@@ -33,6 +37,7 @@ export const main = async () => {
       loop: {
         once: options.once,
         pollIntervalMs: options.pollIntervalMs,
+        lookbackHours: options.lookbackHours,
       },
     })
     console.log('[worker] Run complete')

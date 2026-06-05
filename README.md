@@ -59,6 +59,7 @@ Use these env vars to control it:
 
 - `MONITOR_PORTAL_CONFIG_URL`
 - `MONITOR_PORTAL_NETWORK` (`all`, `mainnet`, or `testnet`)
+- `MONITOR_LOOKBACK_HOURS` (optional worker scan window override)
 - `MONITOR_CHAIN_RPC_OVERRIDES` (JSON map of `chainId -> rpcUrl`)
 - `MONITOR_PARENT_RPC_OVERRIDES` (JSON map of `parentChainId -> rpcUrl`)
 - `MONITOR_PARENT_EXPLORER_OVERRIDES` (JSON map of `parentChainId -> explorerUrl`)
@@ -125,6 +126,7 @@ The main MVP runtime variables are:
 - `POSTGRES_URL`
 - `MONITOR_PORTAL_CONFIG_URL`
 - `MONITOR_PORTAL_NETWORK`
+- `MONITOR_LOOKBACK_HOURS`
 - `MONITOR_WORKER_MONITORS`
 - `MONITOR_API_PORT`
 - `MONITOR_API_CORS_ORIGIN`
@@ -290,6 +292,7 @@ GitHub repository variables:
 
 - optional `MONITOR_PORTAL_CONFIG_URL`
 - optional `MONITOR_PORTAL_NETWORK`
+- optional `MONITOR_LOOKBACK_HOURS`
 - optional `MONITOR_PARENT_EXPLORER_OVERRIDES`
 
 ### 3. Hetzner worker
