@@ -15,12 +15,11 @@ services:
     build: .
     environment:
       POSTGRES_URL: ${POSTGRES_URL}
-      MONITOR_CONFIG_PATH: ${MONITOR_CONFIG_PATH:-./config.json}
+      MONITOR_PORTAL_CONFIG_URL: ${MONITOR_PORTAL_CONFIG_URL}
+      MONITOR_PORTAL_NETWORK: ${MONITOR_PORTAL_NETWORK:-all}
       MONITOR_DB_PATH: ${MONITOR_DB_PATH:-./monitoring.sqlite}
       MONITOR_WORKER_ONCE: ${MONITOR_WORKER_ONCE:-false}
       MONITOR_WORKER_POLL_INTERVAL_MS: ${MONITOR_WORKER_POLL_INTERVAL_MS:-60000}
-    volumes:
-      - ./config.json:/app/config.json:ro
     command: ["/bin/sh", "/app/docker/run-service.sh", "monitor-worker"]
 
   monitor-web:
