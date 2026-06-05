@@ -420,22 +420,7 @@ const getBatchPosterAddress = async (
     )
   }
 
-  // else derive batch poster from the sdk
-  const { batchPosters, isAccurate } = await getBatchPosters(
-    //@ts-ignore - PublicClient that we pass vs PublicClient that orbit-sdk expects is not matching
-    parentChainClient,
-    {
-      rollup: childChainInformation.ethBridge.rollup as `0x${string}`,
-      sequencerInbox: childChainInformation.ethBridge
-        .sequencerInbox as `0x${string}`,
-    }
-  )
-
-  if (isAccurate) {
-    return batchPosters[0] // get the first batch poster
-  } else {
-    throw Error('Batch poster information not found')
-  }
+  return undefined
 }
 
 const getBatchPosterBalanceStatus = async (
@@ -447,11 +432,19 @@ const getBatchPosterBalanceStatus = async (
     childChainInformation
   )
 
-  const batchPoster = (await getBatchPosterAddress(
+  const batchPoster = await getBatchPosterAddress(
     parentChainClient,
     childChainInformation,
     sequencerInboxLogs
-  )) as `0x${string}`
+  )
+
+  if (!batchPoster) {
+    return {
+      batchPoster: '0x0000000000000000000000000000000000000000',
+      currentBalance: 0n,
+    }
+  }
+
   const currentBalance = await parentChainClient.getBalance({
     address: batchPoster,
   })
