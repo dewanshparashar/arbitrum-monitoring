@@ -3,7 +3,7 @@ name: Monitor Batch Poster
 on:
   workflow_dispatch:
   schedule:
-    - cron: '3,13,23,33,43,53 * * * *'
+    - cron: '3 */3 * * *'
 
 concurrency:
   group: monitor-batch-poster
@@ -30,7 +30,7 @@ jobs:
         env:
           POSTGRES_URL: ${{ secrets.MONITOR_POSTGRES_URL }}
           MONITOR_PORTAL_CONFIG_URL: ${{ vars.MONITOR_PORTAL_CONFIG_URL }}
-          MONITOR_PORTAL_NETWORK: ${{ vars.MONITOR_PORTAL_NETWORK }}
+          MONITOR_PORTAL_NETWORK: mainnet
           MONITOR_CHAIN_RPC_OVERRIDES: ${{ secrets.MONITOR_CHAIN_RPC_OVERRIDES }}
           MONITOR_PARENT_RPC_OVERRIDES: ${{ secrets.MONITOR_PARENT_RPC_OVERRIDES }}
           MONITOR_PARENT_EXPLORER_OVERRIDES: ${{ vars.MONITOR_PARENT_EXPLORER_OVERRIDES }}

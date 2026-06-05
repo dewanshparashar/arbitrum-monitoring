@@ -272,6 +272,12 @@ This repo includes three scheduled workflows on the default branch:
 - `.github/workflows/monitor-assertion.yml`
 - `.github/workflows/monitor-retryable.yml`
 
+Current MVP defaults:
+
+- scheduled runs target `mainnet` chains only
+- each workflow runs every `3` hours
+- schedules are staggered at `:03`, `:07`, and `:17`
+
 They run `yarn monitor-worker --once` with explicit monitor filters and write directly to Postgres.
 
 GitHub repository secrets:
