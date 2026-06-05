@@ -22,4 +22,5 @@ export interface WorkerLoopOptions {
   once: boolean
   pollIntervalMs: number
   lookbackHours?: number
+  chainConcurrency: number
 }

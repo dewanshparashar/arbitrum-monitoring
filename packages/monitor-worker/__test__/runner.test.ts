@@ -15,6 +15,15 @@ const childChains = [
     explorerUrl: 'https://child.explorer',
     parentExplorerUrl: 'https://parent.explorer',
   },
+  {
+    chainId: 42170,
+    parentChainId: 1,
+    name: 'Arbitrum Nova',
+    parentRpcUrl: 'https://parent.example',
+    orbitRpcUrl: 'https://child-nova.example',
+    explorerUrl: 'https://nova.explorer',
+    parentExplorerUrl: 'https://parent.explorer',
+  },
 ] as ChildNetwork[]
 
 const createResult = (
@@ -69,11 +78,12 @@ describe('runDueMonitors', () => {
       store,
       scheduleState,
       runContext: { lookbackHours: 3 },
+      chainConcurrency: 2,
       logger,
       now: 1000,
     })
 
-    expect(firstResults).toHaveLength(2)
+    expect(firstResults).toHaveLength(4)
     expect(
       store.readMonitorHistory({
         monitor: 'assertion',
@@ -83,8 +93,25 @@ describe('runDueMonitors', () => {
     ).toHaveLength(1)
     expect(
       store.readMonitorHistory({
+        monitor: 'assertion',
+        chainId: 42170,
+        since: 0,
+      })
+    ).toHaveLength(1)
+    expect(
+      store.readMonitorHistory({
         monitor: 'retryable',
         chainId: 42161,
+        since: 0,
+      })[0]
+    ).toMatchObject({
+      status: 'error',
+      error: 'rpc timeout',
+    })
+    expect(
+      store.readMonitorHistory({
+        monitor: 'retryable',
+        chainId: 42170,
         since: 0,
       })[0]
     ).toMatchObject({
@@ -112,10 +139,56 @@ describe('runDueMonitors', () => {
       now: 2500,
     })
 
-    expect(thirdResults).toHaveLength(1)
-    expect(assertionRun).toHaveBeenCalledTimes(2)
-    expect(retryableRun).toHaveBeenCalledTimes(1)
+    expect(thirdResults).toHaveLength(2)
+    expect(assertionRun).toHaveBeenCalledTimes(4)
+    expect(retryableRun).toHaveBeenCalledTimes(2)
 
+    store.close()
+  })
+
+  test('starts multiple chains in parallel when concurrency is greater than one', async () => {
+    const store = new SqliteMonitorStore(':memory:')
+    const logger = {
+      log: vi.fn(),
+      error: vi.fn(),
+    }
+    const resolvers: Array<() => void> = []
+    const run = vi.fn(
+      (chain: ChildNetwork) =>
+        new Promise<MonitorRunResult>(resolve => {
+          resolvers.push(() =>
+            resolve(createResult('assertion', chain, Date.now()))
+          )
+        })
+    )
+
+    store.initialize()
+
+    const pending = runDueMonitors({
+      childChains,
+      monitors: [
+        {
+          type: 'assertion',
+          intervalMs: 1000,
+          run,
+        },
+      ],
+      store,
+      scheduleState: {},
+      chainConcurrency: 2,
+      logger,
+      now: 1000,
+    })
+
+    await Promise.resolve()
+
+    expect(run).toHaveBeenCalledTimes(2)
+
+    for (const resolve of resolvers) {
+      resolve()
+    }
+
+    await pending
     store.close()
   })
 })

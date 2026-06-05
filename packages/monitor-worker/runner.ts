@@ -55,6 +55,92 @@ const runMonitorSafely = async (
   }
 }
 
+const runMonitorForChain = async ({
+  monitor,
+  chain,
+  index,
+  total,
+  store,
+  runContext,
+  logger,
+}: {
+  monitor: MonitorExecutor
+  chain: ChildNetwork
+  index: number
+  total: number
+  store: MonitorStore
+  runContext?: MonitorRunContext
+  logger: Pick<Console, 'log' | 'error'>
+}) => {
+  const chainStartedAt = Date.now()
+  logger.log(
+    `[${monitor.type}] Starting [${chain.name}] (${chain.chainId}) ${
+      index + 1
+    }/${total}`
+  )
+  const result = await runMonitorSafely(monitor, chain, runContext)
+  await store.persistResult(result)
+
+  if (result.status === 'error') {
+    logger.error(
+      `[${monitor.type}] Failed [${chain.name}] after ${
+        Date.now() - chainStartedAt
+      }ms: ${result.error}`
+    )
+    return result
+  }
+
+  logger.log(
+    `[${monitor.type}] Finished [${chain.name}] with ${result.status} in ${
+      Date.now() - chainStartedAt
+    }ms`
+  )
+  return result
+}
+
+const runMonitorAcrossChains = async ({
+  childChains,
+  monitor,
+  chainConcurrency,
+  store,
+  runContext,
+  logger,
+}: {
+  childChains: ChildNetwork[]
+  monitor: MonitorExecutor
+  chainConcurrency: number
+  store: MonitorStore
+  runContext?: MonitorRunContext
+  logger: Pick<Console, 'log' | 'error'>
+}) => {
+  const concurrency = Math.min(chainConcurrency, childChains.length)
+  const results = new Array<MonitorRunResult | undefined>(childChains.length)
+  let nextIndex = 0
+
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (true) {
+        const index = nextIndex++
+        if (index >= childChains.length) {
+          return
+        }
+
+        results[index] = await runMonitorForChain({
+          monitor,
+          chain: childChains[index],
+          index,
+          total: childChains.length,
+          store,
+          runContext,
+          logger,
+        })
+      }
+    })
+  )
+
+  return results.filter(Boolean) as MonitorRunResult[]
+}
+
 const isDue = (
   monitor: MonitorExecutor,
   scheduleState: WorkerScheduleState,
@@ -70,6 +156,7 @@ export const runDueMonitors = async ({
   store,
   scheduleState,
   runContext,
+  chainConcurrency,
   logger = console,
   now = Date.now(),
 }: {
@@ -78,6 +165,7 @@ export const runDueMonitors = async ({
   store: MonitorStore
   scheduleState: WorkerScheduleState
   runContext?: MonitorRunContext
+  chainConcurrency?: number
   logger?: Pick<Console, 'log' | 'error'>
   now?: number
 }) => {
@@ -88,35 +176,20 @@ export const runDueMonitors = async ({
 
   for (const monitor of dueMonitors) {
     logger.log(
-      `[worker] Running ${monitor.type} monitor across ${childChains.length} chains`
+      `[worker] Running ${monitor.type} monitor across ${
+        childChains.length
+      } chains with concurrency ${chainConcurrency ?? 1}`
     )
-
-    for (const [index, chain] of childChains.entries()) {
-      const chainStartedAt = Date.now()
-      logger.log(
-        `[${monitor.type}] Starting [${chain.name}] (${chain.chainId}) ${
-          index + 1
-        }/${childChains.length}`
-      )
-      const result = await runMonitorSafely(monitor, chain, runContext)
-      await store.persistResult(result)
-      results.push(result)
-
-      if (result.status === 'error') {
-        logger.error(
-          `[${monitor.type}] Failed [${chain.name}] after ${
-            Date.now() - chainStartedAt
-          }ms: ${result.error}`
-        )
-        continue
-      }
-
-      logger.log(
-        `[${monitor.type}] Finished [${chain.name}] with ${result.status} in ${
-          Date.now() - chainStartedAt
-        }ms`
-      )
-    }
+    results.push(
+      ...(await runMonitorAcrossChains({
+        childChains,
+        monitor,
+        chainConcurrency: chainConcurrency ?? 1,
+        store,
+        runContext,
+        logger,
+      }))
+    )
 
     scheduleState[monitor.type] = now
     logger.log(`[worker] Finished ${monitor.type} monitor`)
@@ -151,6 +224,7 @@ export const runWorkerLoop = async ({
       runContext: {
         lookbackHours: loop.lookbackHours,
       },
+      chainConcurrency: loop.chainConcurrency,
       logger,
     })
 

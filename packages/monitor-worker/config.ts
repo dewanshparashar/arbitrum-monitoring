@@ -202,6 +202,14 @@ const parseLookbackHours = (value: number) => {
   return value
 }
 
+const parseChainConcurrency = (value: number) => {
+  if (!Number.isFinite(value) || value < 1) {
+    return 1
+  }
+
+  return Math.floor(value)
+}
+
 export const getWorkerConfig = async () => {
   const options = yargs(process.argv.slice(2))
     .options({
@@ -254,6 +262,10 @@ export const getWorkerConfig = async () => {
         type: 'number',
         default: Number(process.env.MONITOR_LOOKBACK_HOURS || 0),
       },
+      chainConcurrency: {
+        type: 'number',
+        default: Number(process.env.MONITOR_CHAIN_CONCURRENCY || 1),
+      },
     })
     .strict()
     .parseSync()
@@ -274,6 +286,7 @@ export const getWorkerConfig = async () => {
       ...options,
       monitors: parseMonitorTypes(options.monitors),
       lookbackHours: parseLookbackHours(options.lookbackHours),
+      chainConcurrency: parseChainConcurrency(options.chainConcurrency),
     },
   }
 }

@@ -13,9 +13,9 @@ export const main = async () => {
       options.postgresUrl ? 'postgres' : 'sqlite'
     } once=${options.once} lookbackHours=${
       options.lookbackHours ?? 'default'
-    } monitors=${monitors.map(monitor => monitor.type).join(',')} chains=${
-      config.childChains.length
-    }`
+    } chainConcurrency=${options.chainConcurrency} monitors=${monitors
+      .map(monitor => monitor.type)
+      .join(',')} chains=${config.childChains.length}`
   )
   const store = createMonitorStore({
     vendor: inferMonitorStoreVendor({
@@ -38,6 +38,7 @@ export const main = async () => {
         once: options.once,
         pollIntervalMs: options.pollIntervalMs,
         lookbackHours: options.lookbackHours,
+        chainConcurrency: options.chainConcurrency,
       },
     })
     console.log('[worker] Run complete')
