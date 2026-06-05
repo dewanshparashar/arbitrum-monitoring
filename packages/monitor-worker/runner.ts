@@ -80,6 +80,10 @@ export const runDueMonitors = async ({
     logger.log(`Running ${monitor.type} monitor across ${childChains.length} chains`)
 
     for (const chain of childChains) {
+      const chainStartedAt = Date.now()
+      logger.log(
+        `[${monitor.type}] Starting [${chain.name}] (${chain.chainId})`
+      )
       const result = await runMonitorSafely(monitor, chain)
       await store.persistResult(result)
       results.push(result)
@@ -88,7 +92,12 @@ export const runDueMonitors = async ({
         logger.error(
           `${monitor.type} monitor failed for [${chain.name}]: ${result.error}`
         )
+        continue
       }
+
+      logger.log(
+        `[${monitor.type}] Finished [${chain.name}] with ${result.status} in ${Date.now() - chainStartedAt}ms`
+      )
     }
 
     scheduleState[monitor.type] = now

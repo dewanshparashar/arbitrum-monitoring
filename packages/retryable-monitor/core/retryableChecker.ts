@@ -38,6 +38,10 @@ export const checkRetryables = async (
 ): Promise<ObservedRetryableTicket[]> => {
   const observedTickets: ObservedRetryableTicket[] = []
 
+  console.log(
+    `[retryable] Fetching MessageDelivered logs for [${childChain.name}] in blocks ${fromBlock}-${toBlock}`
+  )
+
   const messageDeliveredLogs = await getMessageDeliveredEventData(
     bridgeAddress,
     { fromBlock, toBlock },
@@ -56,6 +60,10 @@ export const checkRetryables = async (
     },
   })
 
+  console.log(
+    `[retryable] Found ${messageDeliveredLogs.length} message-delivered log(s), ${depositsInitiatedLogs.length} deposit log(s) for [${childChain.name}]`
+  )
+
   const uniqueTxHashes = new Set<string>()
   for (let messageDeliveredLog of messageDeliveredLogs) {
     const { transactionHash: parentTxHash } = messageDeliveredLog
@@ -65,14 +73,27 @@ export const checkRetryables = async (
   const { PARENT_CHAIN_TX_PREFIX, CHILD_CHAIN_TX_PREFIX } =
     getExplorerUrlPrefixes(childChain)
 
+  console.log(
+    `[retryable] Processing ${uniqueTxHashes.size} parent transaction(s) for [${childChain.name}]`
+  )
+
   // for each parent-chain-transaction found, extract the Retryables thus created by it
+  let txIndex = 0
   for (const parentTxHash of uniqueTxHashes) {
+    txIndex += 1
+    console.log(
+      `[retryable] Parent tx ${txIndex}/${uniqueTxHashes.size} for [${childChain.name}]: ${PARENT_CHAIN_TX_PREFIX + parentTxHash}`
+    )
     const parentTxReceipt = await parentChainProvider.getTransactionReceipt(
       parentTxHash
     )
     const arbParentTxReceipt = new ParentTransactionReceipt(parentTxReceipt)
     const retryables = await arbParentTxReceipt.getParentToChildMessages(
       childChainProvider
+    )
+
+    console.log(
+      `[retryable] Parent tx ${txIndex}/${uniqueTxHashes.size} yielded ${retryables.length} retryable(s)`
     )
 
     if (retryables.length > 0) {

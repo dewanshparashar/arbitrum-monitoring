@@ -103,6 +103,9 @@ export const runRetryableMonitorForChain = async ({
   writeToNotion: boolean
 }): Promise<RetryableMonitorResult> => {
   const startedAt = Date.now()
+  console.log(
+    `[retryable] Starting one-off run for [${childChain.name}] (${childChain.chainId})`
+  )
   const { onFailedRetryableFound, onRedeemedRetryableFound } =
     getHandlers(writeToNotion)
   const result = await checkRetryablesOneOff({
@@ -115,6 +118,10 @@ export const runRetryableMonitorForChain = async ({
     onFailedRetryableFound,
     onRedeemedRetryableFound,
   })
+
+  console.log(
+    `[retryable] Finished [${childChain.name}] with ${result.tickets.length} ticket(s) across blocks ${result.fromBlock}-${result.toBlock} in ${Date.now() - startedAt}ms`
+  )
 
   return buildRetryableMonitorResult({
     childChain,
@@ -187,7 +194,7 @@ export const processOrbitChainsConcurrently = async () => {
   const { config, options } = getMonitorConfig()
 
   console.log(
-    '>>>>>> Processing child chains: ',
+    '[retryable] Processing child chains:',
     config.childChains.map((childChain: ChildNetwork) => ({
       name: childChain.name,
       chainID: childChain.chainId,

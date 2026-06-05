@@ -48,6 +48,10 @@ export const checkRetryablesOneOff = async ({
   onFailedRetryableFound,
   onRedeemedRetryableFound,
 }: CheckRetryablesOneOffParams) => {
+  console.log(
+    `[retryable] Preparing scan window for [${childChain.name}] fromBlock=${fromBlock} toBlock=${toBlock}`
+  )
+
   if (toBlock === 0) {
     try {
       const currentBlock = await parentChainProvider.getBlockNumber()
@@ -63,7 +67,7 @@ export const checkRetryablesOneOff = async ({
           toBlock -
           (2 * SEVEN_DAYS_IN_SECONDS) / getParentChainBlockTime(childChain)
         console.log(
-          `Alerting mode enabled: limiting block-range to last 14 days [${fromBlock} to ${toBlock}]`
+          `[retryable] Alerting mode enabled: limiting block-range to last 14 days [${fromBlock} to ${toBlock}]`
         )
       }
     } catch (error) {
@@ -73,6 +77,10 @@ export const checkRetryablesOneOff = async ({
       throw error
     }
   }
+
+  console.log(
+    `[retryable] Scanning [${childChain.name}] across blocks ${fromBlock}-${toBlock} with chunk size ${MAX_BLOCKS_TO_PROCESS}`
+  )
 
   const tickets = await processBlockRangeInChunks(
     fromBlock,
@@ -119,6 +127,9 @@ export const checkRetryablesContinuous = async ({
 
   // Function to process blocks and check for retryables
   const processBlocks = async () => {
+    console.log(
+      `[retryable] Continuous iteration for [${childChain.name}] from ${fromBlock} to ${toBlock}`
+    )
     const { lastBlockChecked } = await checkRetryablesOneOff({
       parentChainProvider,
       childChainProvider,
@@ -129,12 +140,12 @@ export const checkRetryablesContinuous = async ({
       onFailedRetryableFound,
       onRedeemedRetryableFound,
     })
-    console.log('Check completed for block:', lastBlockChecked)
+    console.log('[retryable] Check completed for block:', lastBlockChecked)
     fromBlock = lastBlockChecked + 1
-    console.log('Continuing from block:', fromBlock)
+    console.log('[retryable] Continuing from block:', fromBlock)
 
     toBlock = await parentChainProvider.getBlockNumber()
-    console.log(`Processed blocks up to ${lastBlockChecked}`)
+    console.log(`[retryable] Processed blocks up to ${lastBlockChecked}`)
 
     return lastBlockChecked
   }
