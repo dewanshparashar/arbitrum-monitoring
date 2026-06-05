@@ -553,24 +553,30 @@ const checkForUserTransactionBlocks = async ({
   fromBlock,
   toBlock,
   publicClient,
+  minTimestampSeconds,
 }: {
   fromBlock: number
   toBlock: number
   publicClient: PublicClient
+  minTimestampSeconds?: bigint
 }) => {
   const MINER_OF_USER_TX_BLOCKS = '0xa4b000000000000000000073657175656e636572' // this will be the miner address if a block contains user tx
 
-  let userTransactionBlockFound = false
-
-  for (let i = fromBlock; i <= toBlock; i++) {
+  for (let i = toBlock; i >= fromBlock; i--) {
     const block = await publicClient.getBlock({ blockNumber: BigInt(i) })
+    if (
+      minTimestampSeconds !== undefined &&
+      block.timestamp < minTimestampSeconds
+    ) {
+      return false
+    }
+
     if (block.miner === MINER_OF_USER_TX_BLOCKS) {
-      userTransactionBlockFound = true
-      break
+      return true
     }
   }
 
-  return userTransactionBlockFound
+  return false
 }
 
 const getBatchPostingTimeBounds = async (
@@ -763,6 +769,11 @@ export const runBatchPosterMonitorForChain = async (
         fromBlock: Number(latestChildChainSafeBlock.number + 1n), // start checking AFTER the latest 'safe' block
         toBlock: Number(latestChildChainBlockNumber),
         publicClient: childChainClient,
+        minTimestampSeconds: options?.lookbackHours
+          ? BigInt(
+              Math.floor(Date.now() / 1000) - options.lookbackHours * 60 * 60
+            )
+          : undefined,
       })
 
     const batchPostingBacklog =
