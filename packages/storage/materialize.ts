@@ -22,10 +22,8 @@ export const createLatestSnapshotId = (
   chainId: number
 ) => `${monitor}:${chainId}`
 
-const countFindings = (
-  result: MonitorRunResult,
-  severity: MonitorSeverity
-) => result.findings.filter(item => item.severity === severity).length
+const countFindings = (result: MonitorRunResult, severity: MonitorSeverity) =>
+  result.findings.filter(item => item.severity === severity).length
 
 const buildSnapshotSummary = (
   result: MonitorRunResult
@@ -60,7 +58,7 @@ const buildObservationRows = (
   runId: string
 ): RawObservationRow[] =>
   result.observations.map(observation => ({
-    id: observation.id,
+    id: `${runId}:observation:${observation.id}`,
     run_id: runId,
     monitor: observation.monitor,
     chain_id: observation.chainId,
@@ -88,8 +86,15 @@ const buildMetricRows = (
 const buildFindingRows = (
   result: MonitorRunResult,
   runId: string
-): DerivedFindingRow[] =>
-  result.findings.map((finding, index) => ({
+): DerivedFindingRow[] => {
+  const observationIdMap = new Map(
+    result.observations.map(observation => [
+      observation.id,
+      `${runId}:observation:${observation.id}`,
+    ])
+  )
+
+  return result.findings.map((finding, index) => ({
     id: `${runId}:finding:${index}`,
     run_id: runId,
     monitor: finding.monitor,
@@ -99,10 +104,16 @@ const buildFindingRows = (
     title: finding.title,
     message: finding.message,
     observation_ids_json: finding.observationIds
-      ? toJson(finding.observationIds)
+      ? toJson(
+          finding.observationIds.map(
+            observationId =>
+              observationIdMap.get(observationId) ?? observationId
+          )
+        )
       : null,
     data_json: finding.data ? toJson(finding.data) : null,
   }))
+}
 
 const buildLatestSnapshotRow = (
   result: MonitorRunResult,

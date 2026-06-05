@@ -128,7 +128,7 @@ describe('handleApiRequest', () => {
     expect(run.status).toBe(200)
     expect(run.body).toMatchObject({
       run: { id: createMonitorRunId(result) },
-      observations: [{ id: 'obs-1' }],
+      observations: [{ id: `${createMonitorRunId(result)}:observation:obs-1` }],
       metrics: [{ key: 'assertions_missing', value: 1 }],
       findings: [{ code: 'assertions_missing' }],
     })

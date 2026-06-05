@@ -87,7 +87,7 @@ describe('materializeMonitorResult', () => {
 
     expect(rows.observations).toEqual([
       {
-        id: 'obs-1',
+        id: `${createMonitorRunId(result)}:observation:obs-1`,
         run_id: createMonitorRunId(result),
         monitor: 'assertion',
         chain_id: 42161,
@@ -121,7 +121,9 @@ describe('materializeMonitorResult', () => {
         severity: 'critical',
         title: 'Assertions missing',
         message: 'No recent assertions found.',
-        observation_ids_json: '["obs-1"]',
+        observation_ids_json: `["${createMonitorRunId(
+          result
+        )}:observation:obs-1"]`,
         data_json: null,
       },
     ])
@@ -217,6 +219,44 @@ describe('materializeMonitorResult', () => {
     expect(insertMonitorRunQuery(rows.run).params[2]).toBe(37714555429)
     expect(upsertLatestSnapshotQuery(rows.latest_snapshot).params[2]).toBe(
       37714555429
+    )
+  })
+
+  test('namespaces repeated observation ids by run', () => {
+    const firstResult: MonitorRunResult = {
+      monitor: 'batch-poster',
+      chainId: 660279,
+      chainName: 'Xai',
+      startedAt: 1,
+      finishedAt: 2,
+      status: 'ok',
+      observations: [
+        {
+          id: 'batch-poster-config:660279:0xabc',
+          monitor: 'batch-poster',
+          chainId: 660279,
+          observedAt: 2,
+          kind: 'batch-poster-config',
+          data: {},
+        },
+      ],
+      metrics: [],
+      findings: [],
+    }
+    const secondResult: MonitorRunResult = {
+      ...firstResult,
+      startedAt: 3,
+      finishedAt: 4,
+    }
+
+    const firstRows = materializeMonitorResult(firstResult)
+    const secondRows = materializeMonitorResult(secondResult)
+
+    expect(firstRows.observations[0].id).toBe(
+      'batch-poster:660279:1:2:observation:batch-poster-config:660279:0xabc'
+    )
+    expect(secondRows.observations[0].id).toBe(
+      'batch-poster:660279:3:4:observation:batch-poster-config:660279:0xabc'
     )
   })
 
