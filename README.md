@@ -49,13 +49,21 @@ For hosted MVP deployment:
 
 ### Chain Configuration
 
-1. Copy and edit the config file:
+The worker now defaults to the latest portal snapshot at:
 
-```bash
-cp config.example.json config.json
-```
+- [orbitChainsData.json](https://raw.githubusercontent.com/OffchainLabs/arbitrum-portal/refs/heads/master/packages/arb-token-bridge-ui/src/util/orbitChainsData.json)
 
-2. Configure your chains in `config.json`:
+It transforms that snapshot into the monitor config shape automatically.
+
+Use these env vars to control it:
+
+- `MONITOR_PORTAL_CONFIG_URL`
+- `MONITOR_PORTAL_NETWORK` (`all`, `mainnet`, or `testnet`)
+- `MONITOR_CHAIN_RPC_OVERRIDES` (JSON map of `chainId -> rpcUrl`)
+- `MONITOR_PARENT_RPC_OVERRIDES` (JSON map of `parentChainId -> rpcUrl`)
+- `MONITOR_PARENT_EXPLORER_OVERRIDES` (JSON map of `parentChainId -> explorerUrl`)
+
+If you need to force a local file instead, set `MONITOR_CONFIG_PATH` and use:
 
 ```json
 {
@@ -115,7 +123,8 @@ cp .env.example .env
 The main MVP runtime variables are:
 
 - `POSTGRES_URL`
-- `MONITOR_CONFIG_PATH`
+- `MONITOR_PORTAL_CONFIG_URL`
+- `MONITOR_PORTAL_NETWORK`
 - `MONITOR_API_PORT`
 - `MONITOR_API_CORS_ORIGIN`
 - `MONITOR_WORKER_POLL_INTERVAL_MS`
@@ -167,7 +176,6 @@ For a quick local or single-host MVP bring-up:
 
 ```bash
 cp .env.example .env
-cp config.example.json config.json
 docker compose up --build
 ```
 
@@ -209,8 +217,7 @@ Vercel environment variables:
 The worker deployment still needs:
 
 - `POSTGRES_URL`
-- `MONITOR_CONFIG_PATH`
-- access to `config.json`
+- portal snapshot access, or `MONITOR_CONFIG_PATH` if you want a local file override
 
 ## Hosted deployment
 
@@ -259,12 +266,11 @@ On the worker host, clone the repo and provide:
 
 ```bash
 POSTGRES_URL=<Supabase DIRECT_URL>
-MONITOR_CONFIG_PATH=./config.json
 ```
 
 Also provide:
 
-- repo-root `config.json`
+- optional repo-root `config.json` only if you want a local override instead of the portal snapshot
 - any optional Slack / Notion env vars you need
 
 Then run:
