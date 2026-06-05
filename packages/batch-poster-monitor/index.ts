@@ -643,6 +643,9 @@ export const runBatchPosterMonitorForChain = async (
   childChainInformation: ChainInfo
 ): Promise<BatchPosterMonitorResult> => {
   const startedAt = Date.now()
+  console.log(
+    `[batch-poster] Starting [${childChainInformation.name}] (${childChainInformation.chainId})`
+  )
   const parentChain = getChainFromId(childChainInformation.parentChainId)
   const childChain = defineChain({
     id: childChainInformation.chainId,
@@ -672,6 +675,7 @@ export const runBatchPosterMonitorForChain = async (
     transport: http(childChainInformation.orbitRpcUrl),
   })
 
+  console.log(`[batch-poster] Resolving rollup for [${childChainInformation.name}]`)
   childChainInformation.ethBridge.rollup = await resolveRollupAddress(
     parentChainClient,
     childChainInformation.ethBridge,
@@ -684,6 +688,9 @@ export const runBatchPosterMonitorForChain = async (
   const blocksToProcess = getMaxBlockRange(parentChain)
   const toBlock = latestBlockNumber
   const fromBlock = toBlock - blocksToProcess
+  console.log(
+    `[batch-poster] [${childChainInformation.name}] scanning parent blocks ${fromBlock} to ${toBlock}`
+  )
 
   const sequencerInboxLogs = await processBlockRangeInChunks(
     Number(fromBlock.toString()),
@@ -699,11 +706,17 @@ export const runBatchPosterMonitorForChain = async (
     (prev, next) => [...prev, ...next],
     [] as Log<bigint, number, false, AbiEvent, true, readonly AbiEvent[]>[]
   )
+  console.log(
+    `[batch-poster] [${childChainInformation.name}] found ${sequencerInboxLogs.length} sequencer inbox log(s)`
+  )
 
   const balanceStatus = await getBatchPosterBalanceStatus(
     parentChainClient,
     childChainInformation,
     sequencerInboxLogs
+  )
+  console.log(
+    `[batch-poster] [${childChainInformation.name}] balance=${balanceStatus.currentBalance.toString()} message=${balanceStatus.message || 'none'}`
   )
 
   const batchPostingTimeBounds = await getBatchPostingTimeBounds(
@@ -754,6 +767,9 @@ export const runBatchPosterMonitorForChain = async (
       chainInfo: childChainInformation,
       summary,
     })
+    console.log(
+      `[batch-poster] Finished [${childChainInformation.name}] with ${findings.length} finding(s) in ${Date.now() - startedAt}ms`
+    )
 
     return buildBatchPosterMonitorResult({
       chainInfo: childChainInformation,
@@ -808,6 +824,9 @@ export const runBatchPosterMonitorForChain = async (
     chainInfo: childChainInformation,
     summary,
   })
+  console.log(
+    `[batch-poster] Finished [${childChainInformation.name}] with ${findings.length} finding(s) in ${Date.now() - startedAt}ms`
+  )
 
   return buildBatchPosterMonitorResult({
     chainInfo: childChainInformation,

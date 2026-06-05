@@ -77,12 +77,14 @@ export const runDueMonitors = async ({
   const results: MonitorRunResult[] = []
 
   for (const monitor of dueMonitors) {
-    logger.log(`Running ${monitor.type} monitor across ${childChains.length} chains`)
+    logger.log(
+      `[worker] Running ${monitor.type} monitor across ${childChains.length} chains`
+    )
 
-    for (const chain of childChains) {
+    for (const [index, chain] of childChains.entries()) {
       const chainStartedAt = Date.now()
       logger.log(
-        `[${monitor.type}] Starting [${chain.name}] (${chain.chainId})`
+        `[${monitor.type}] Starting [${chain.name}] (${chain.chainId}) ${index + 1}/${childChains.length}`
       )
       const result = await runMonitorSafely(monitor, chain)
       await store.persistResult(result)
@@ -90,7 +92,7 @@ export const runDueMonitors = async ({
 
       if (result.status === 'error') {
         logger.error(
-          `${monitor.type} monitor failed for [${chain.name}]: ${result.error}`
+          `[${monitor.type}] Failed [${chain.name}] after ${Date.now() - chainStartedAt}ms: ${result.error}`
         )
         continue
       }
@@ -101,9 +103,11 @@ export const runDueMonitors = async ({
     }
 
     scheduleState[monitor.type] = now
+    logger.log(`[worker] Finished ${monitor.type} monitor`)
   }
 
   await store.pruneOldRuns(now)
+  logger.log('[worker] Pruned old runs')
   return results
 }
 

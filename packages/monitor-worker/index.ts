@@ -8,6 +8,11 @@ export const main = async () => {
   const monitors = defaultMonitorExecutors.filter(monitor =>
     options.monitors.includes(monitor.type)
   )
+  console.log(
+    `[worker] Starting run with store=${options.postgresUrl ? 'postgres' : 'sqlite'} once=${options.once} monitors=${monitors
+      .map(monitor => monitor.type)
+      .join(',')} chains=${config.childChains.length}`
+  )
   const store = createMonitorStore({
     vendor: inferMonitorStoreVendor({
       postgresUrl: options.postgresUrl,
@@ -18,6 +23,7 @@ export const main = async () => {
   })
 
   await store.initialize()
+  console.log('[worker] Store initialized')
 
   try {
     await runWorkerLoop({
@@ -29,7 +35,9 @@ export const main = async () => {
         pollIntervalMs: options.pollIntervalMs,
       },
     })
+    console.log('[worker] Run complete')
   } finally {
     await store.close()
+    console.log('[worker] Store closed')
   }
 }

@@ -113,7 +113,7 @@ export const getBlockRange = async (
 
   if (blockRange !== blocks) {
     console.log(
-      `Capping assertion search window for ${childChainInfo.name} to ${blockRange} blocks on testnet parent chain`
+      `[assertion] Capping search window for [${childChainInfo.name}] to ${blockRange} blocks on testnet parent chain`
     )
   }
 
@@ -160,7 +160,9 @@ export const runAssertionMonitorForChain = async (
   options?: { enableAlerting: boolean }
 ): Promise<AssertionMonitorResult> => {
   const startedAt = Date.now()
-  console.log(`\nMonitoring ${childChainInfo.name}...`)
+  console.log(
+    `[assertion] Starting [${childChainInfo.name}] (${childChainInfo.chainId})`
+  )
 
   const parentChain = getChainFromId(childChainInfo.parentChainId)
   const parentClient = createPublicClient({
@@ -168,6 +170,7 @@ export const runAssertionMonitorForChain = async (
     transport: http(childChainInfo.parentRpcUrl),
   })
 
+  console.log(`[assertion] Resolving rollup for [${childChainInfo.name}]`)
   childChainInfo.ethBridge.rollup = await resolveRollupAddress(
     parentClient,
     childChainInfo.ethBridge,
@@ -178,16 +181,19 @@ export const runAssertionMonitorForChain = async (
     parentClient,
     childChainInfo.ethBridge.rollup
   )
-  console.log(`Chain type: ${isBold ? 'BoLD' : 'Classic'} rollup`)
+  console.log(
+    `[assertion] [${childChainInfo.name}] chain type: ${isBold ? 'BoLD' : 'Classic'}`
+  )
 
   const { fromBlock, toBlock } =
     blockRange || (await getBlockRange(parentClient, childChainInfo))
   console.log(
-    `Scanning blocks ${fromBlock} to ${toBlock} (${toBlock - fromBlock} blocks)`
+    `[assertion] [${childChainInfo.name}] scanning blocks ${fromBlock} to ${toBlock} (${toBlock - fromBlock} blocks)`
   )
 
   const childChainClient = createChildChainClient(childChainInfo)
 
+  console.log(`[assertion] Fetching chain state for [${childChainInfo.name}]`)
   const chainState = await fetchChainState({
     childChainClient,
     parentClient,
@@ -201,6 +207,10 @@ export const runAssertionMonitorForChain = async (
     chainState,
     childChainInfo,
     isBold
+  )
+
+  console.log(
+    `[assertion] Finished [${childChainInfo.name}] with ${findings.length} finding(s) in ${Date.now() - startedAt}ms`
   )
 
   return buildAssertionMonitorResult({
