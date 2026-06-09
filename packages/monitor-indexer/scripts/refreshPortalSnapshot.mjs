@@ -1,6 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { toEventSelector } from 'viem'
+import boldAssertionEvents from '../src/abis/rollupBold.json' with { type: 'json' }
 
 const PORTAL_URL =
   'https://raw.githubusercontent.com/OffchainLabs/arbitrum-portal/master/packages/arb-token-bridge-ui/src/util/orbitChainsData.json'
@@ -8,6 +11,10 @@ const PORTAL_URL =
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(SCRIPT_DIR, '..')
 const OUT_PATH = path.join(PACKAGE_DIR, 'src/generated/portalMainnet.json')
+const require = createRequire(import.meta.url)
+const rollupCoreArtifact = require(
+  '@arbitrum/nitro-contracts/build/contracts/src/rollup/IRollupCore.sol/IRollupCore.json'
+)
 
 const MAX_LOOKBACK_DAYS = 8
 
@@ -22,6 +29,21 @@ const PARENT_RPC_URLS = {
   8453: 'https://base-rpc.publicnode.com',
   42161: 'https://arbitrum-one-rpc.publicnode.com',
 }
+
+const boldAssertionCreatedEvent = boldAssertionEvents.find(
+  item => item.type === 'event' && item.name === 'AssertionCreated'
+)
+
+const classicNodeCreatedEvent = rollupCoreArtifact.abi.find(
+  item => item.type === 'event' && item.name === 'NodeCreated'
+)
+
+if (!classicNodeCreatedEvent || !boldAssertionCreatedEvent) {
+  throw new Error('Required rollup events not found')
+}
+
+const classicNodeCreatedSelector = toEventSelector(classicNodeCreatedEvent)
+const boldAssertionCreatedSelector = toEventSelector(boldAssertionCreatedEvent)
 
 const pickChain = chain => ({
   chainId: chain.chainId,
@@ -71,6 +93,49 @@ const getLatestBlockNumber = async (rpcUrl, chainId) => {
   return Number.parseInt(json.result, 16)
 }
 
+const getCode = async (rpcUrl, chainId, address) => {
+  const response = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      id: `${chainId}-code-${address}`,
+      jsonrpc: '2.0',
+      method: 'eth_getCode',
+      params: [address, 'latest'],
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(
+      `Failed to read code for parent ${chainId}: ${response.status} ${response.statusText}`
+    )
+  }
+
+  const json = await response.json()
+  if (json.error) {
+    throw new Error(
+      `RPC error for code on parent ${chainId}: ${json.error.message || 'unknown error'}`
+    )
+  }
+
+  return String(json.result || '0x')
+}
+
+const detectRollupEventFamily = async (rpcUrl, chain) => {
+  const code = (await getCode(rpcUrl, chain.parentChainId, chain.ethBridge.rollup))
+    .toLowerCase()
+
+  if (code.includes(boldAssertionCreatedSelector.slice(2).toLowerCase())) {
+    return 'bold'
+  }
+
+  if (code.includes(classicNodeCreatedSelector.slice(2).toLowerCase())) {
+    return 'classic'
+  }
+
+  return 'unknown'
+}
+
 const main = async () => {
   const response = await fetch(PORTAL_URL)
   if (!response.ok) {
@@ -109,6 +174,16 @@ const main = async () => {
     )
   }
 
+  const profiledMainnet = []
+
+  for (const chain of mainnet) {
+    const rpcUrl = PARENT_RPC_URLS[chain.parentChainId]
+    profiledMainnet.push({
+      ...chain,
+      rollupEventFamily: await detectRollupEventFamily(rpcUrl, chain),
+    })
+  }
+
   mkdirSync(path.dirname(OUT_PATH), { recursive: true })
   writeFileSync(
     OUT_PATH,
@@ -116,7 +191,7 @@ const main = async () => {
       {
         generatedAt: new Date().toISOString(),
         maxLookbackDays: MAX_LOOKBACK_DAYS,
-        portalMainnetChains: mainnet,
+        portalMainnetChains: profiledMainnet,
         portalParentChainIds: parentChainIds,
         parentStartBlocks,
       },
@@ -124,7 +199,7 @@ const main = async () => {
       2
     )
   )
-  console.log(`Wrote ${mainnet.length} mainnet chains to ${OUT_PATH}`)
+  console.log(`Wrote ${profiledMainnet.length} mainnet chains to ${OUT_PATH}`)
 }
 
 main().catch(error => {

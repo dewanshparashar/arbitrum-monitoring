@@ -1,5 +1,7 @@
 import snapshot from './generated/portalMainnet.json'
 
+export type RollupEventFamily = 'classic' | 'bold' | 'unknown'
+
 export type PortalMainnetChain = {
   chainId: number
   name: string
@@ -17,6 +19,7 @@ export type PortalMainnetChain = {
     assertionIntervalSeconds: number | null
     fastWithdrawalTime: number | null
   }
+  rollupEventFamily: RollupEventFamily
 }
 
 type PortalSnapshot = {
@@ -27,7 +30,11 @@ type PortalSnapshot = {
   parentStartBlocks: Record<string, number>
 }
 
-export type FleetSourceKind = 'assertion' | 'batch' | 'retryable'
+export type FleetSourceKind =
+  | 'assertion_bold'
+  | 'assertion_classic'
+  | 'batch'
+  | 'retryable'
 
 export type FleetSourceMeta = {
   kind: FleetSourceKind
@@ -60,7 +67,22 @@ const defaultParentRpcs: Record<number, string> = {
 
 export const portalSnapshotGeneratedAt = data.generatedAt
 export const maxLookbackDays = data.maxLookbackDays
-export const portalMainnetChains = data.portalMainnetChains
+const normalizeRollupEventFamily = (
+  value: string | undefined
+): RollupEventFamily => {
+  if (value === 'bold' || value === 'classic') {
+    return value
+  }
+
+  return 'unknown'
+}
+
+export const portalMainnetChains = data.portalMainnetChains.map(chain => ({
+  ...chain,
+  rollupEventFamily: normalizeRollupEventFamily(
+    (chain as { rollupEventFamily?: string }).rollupEventFamily
+  ),
+}))
 export const portalParentChainIds = data.portalParentChainIds
 export const parentStartBlocks = Object.fromEntries(
   Object.entries(data.parentStartBlocks).map(([key, value]) => [Number(key), value])
@@ -111,8 +133,20 @@ export const batchSources = portalMainnetChains.map(chain =>
   createSourceMeta('batch', chain)
 )
 
-export const assertionSources = portalMainnetChains.map(chain =>
-  createSourceMeta('assertion', chain)
+const getAssertionKinds = (chain: PortalMainnetChain): FleetSourceKind[] => {
+  if (chain.rollupEventFamily === 'bold') {
+    return ['assertion_bold']
+  }
+
+  if (chain.rollupEventFamily === 'classic') {
+    return ['assertion_classic']
+  }
+
+  return ['assertion_classic', 'assertion_bold']
+}
+
+export const assertionSources = portalMainnetChains.flatMap(chain =>
+  getAssertionKinds(chain).map(kind => createSourceMeta(kind, chain))
 )
 
 export const retryableSources = portalMainnetChains.map(chain =>

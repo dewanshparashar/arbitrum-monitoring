@@ -15,7 +15,7 @@ Current chain selection:
 The first pass indexes parent-chain events and exposes a fleet register API:
 
 - batch deliveries from `SequencerInbox`
-- assertion creation and confirmation events from `Rollup`
+- assertion events from `Rollup`, with the event family selected from a generated rollup profile
 - retryable creations from `Bridge.MessageDelivered(kind=9)`
 
 The API materializes those into:
@@ -30,7 +30,30 @@ The API materializes those into:
 - the web app does not call chains
 - the API only reads Postgres
 - the indexer owns the portal snapshot and start-block generation
+- the indexer owns rollup event-family detection and ABI selection
 - the old polling worker is not part of the product path
+
+## Rollup profiles
+
+The portal refresh step now generates a chain profile for each rollup contract.
+
+Current profile field:
+
+- `rollupEventFamily`: `classic`, `bold`, or `unknown`
+
+Detection strategy:
+
+- fetch deployed rollup bytecode from the parent chain
+- scan for the classic `NodeCreated` event selector
+- scan for the BoLD `AssertionCreated` event selector
+- persist the detected family into the generated portal snapshot
+- use one shared BoLD event ABI definition for both selector generation and Ponder contract registration
+
+Runtime behavior:
+
+- `classic` chains register only classic node event sources
+- `bold` chains register only BoLD assertion event sources
+- `unknown` chains register both families as a fallback so indexing can still start
 
 ## Gaps still intentionally left open
 

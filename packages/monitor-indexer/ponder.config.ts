@@ -1,10 +1,16 @@
 import { createConfig } from 'ponder'
-import { batchSources, assertionSources, getParentRpcUrls, retryableSources } from './src/portal'
+import {
+  assertionSources,
+  batchSources,
+  getParentRpcUrls,
+  retryableSources,
+} from './src/portal'
 import { sequencerInboxAbi } from './src/abis/batchPoster'
-import { rollupAbi } from './src/abis/assertion'
+import { rollupBoldAbi, rollupClassicAbi } from './src/abis/assertion'
 import { bridgeAbi } from './src/abis/retryable'
 
 const parentRpcUrls = getParentRpcUrls()
+const databaseSchema = process.env.DATABASE_SCHEMA || 'public'
 
 const createContractEntries = () => ({
   ...Object.fromEntries(
@@ -22,7 +28,10 @@ const createContractEntries = () => ({
     assertionSources.map(source => [
       source.name,
       {
-        abi: rollupAbi,
+        abi:
+          source.kind === 'assertion_bold'
+            ? rollupBoldAbi
+            : rollupClassicAbi,
         chain: source.parentChainKey,
         address: source.chain.ethBridge.rollup as `0x${string}`,
         startBlock: source.startBlock,
@@ -48,6 +57,7 @@ export default createConfig({
       ? {
           kind: 'postgres',
           connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
+          schema: databaseSchema,
         }
       : undefined,
   ordering: 'multichain',

@@ -1,0 +1,32 @@
+services:
+  monitor-indexer:
+    build:
+      context: .
+      target: monitor-indexer
+    env_file:
+      - ./deploy/hetzner/monitoring.env
+    restart: unless-stopped
+
+  monitor-api:
+    build:
+      context: .
+      target: monitor-api
+    env_file:
+      - ./deploy/hetzner/monitoring.env
+    ports:
+      - "4010:4010"
+    restart: unless-stopped
+    depends_on:
+      - monitor-indexer
+
+  monitor-web:
+    build:
+      context: .
+      target: monitor-web
+    env_file:
+      - ./deploy/hetzner/monitoring.env
+    ports:
+      - "4020:4020"
+    restart: unless-stopped
+    depends_on:
+      - monitor-api
