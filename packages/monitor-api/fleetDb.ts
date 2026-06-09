@@ -201,9 +201,19 @@ const byChainId = <T extends { chain_id: number }>(rows: T[]): Map<number, T> =>
 
 export class FleetDb {
   private readonly pool: Pool
+  private readonly batchDeliveriesTable: string
+  private readonly assertionEventsTable: string
+  private readonly retryableTicketsTable: string
 
-  constructor(connectionString: string) {
+  constructor(
+    connectionString: string,
+    schema = process.env.DATABASE_SCHEMA || 'public'
+  ) {
     this.pool = new Pool({ connectionString })
+    const qualifiedSchema = quoteIdentifier(schema)
+    this.batchDeliveriesTable = `${qualifiedSchema}.batch_deliveries`
+    this.assertionEventsTable = `${qualifiedSchema}.assertion_events`
+    this.retryableTicketsTable = `${qualifiedSchema}.retryable_tickets`
   }
 
   async healthCheck() {
@@ -243,7 +253,7 @@ export class FleetDb {
           parent_block_timestamp,
           batch_sequence_number,
           data_location
-        from batch_deliveries
+        from ${this.batchDeliveriesTable}
         order by chain_id, parent_block_timestamp desc, log_index desc
       `),
       this.pool.query<AssertionSummaryRow>(`
@@ -251,7 +261,7 @@ export class FleetDb {
           select distinct on (chain_id)
             chain_id,
             event_name
-          from assertion_events
+          from ${this.assertionEventsTable}
           order by chain_id, parent_block_timestamp desc, log_index desc
         )
         select
@@ -261,7 +271,7 @@ export class FleetDb {
           latest.event_name as latest_event_name,
           count(*) filter (where events.kind = 'created') as created_count,
           count(*) filter (where events.kind = 'confirmed') as confirmed_count
-        from assertion_events events
+        from ${this.assertionEventsTable} events
         left join latest on latest.chain_id = events.chain_id
         group by events.chain_id, latest.event_name
       `),
@@ -272,7 +282,7 @@ export class FleetDb {
             count(*) as total_count,
             count(*) filter (where expires_at > $1 and expires_at - $1 <= 72 * 60 * 60) as expiring_count,
             count(*) filter (where expires_at <= $1) as expired_count
-          from retryable_tickets
+          from ${this.retryableTicketsTable}
           group by chain_id
         `,
         [nowSeconds]
@@ -356,7 +366,7 @@ export class FleetDb {
       this.pool.query(
         `
           select *
-          from batch_deliveries
+          from ${this.batchDeliveriesTable}
           where chain_id = $1
           order by parent_block_timestamp desc, log_index desc
           limit 25
@@ -366,7 +376,7 @@ export class FleetDb {
       this.pool.query(
         `
           select *
-          from assertion_events
+          from ${this.assertionEventsTable}
           where chain_id = $1
           order by parent_block_timestamp desc, log_index desc
           limit 25
@@ -376,7 +386,7 @@ export class FleetDb {
       this.pool.query(
         `
           select *
-          from retryable_tickets
+          from ${this.retryableTicketsTable}
           where chain_id = $1
           order by parent_block_timestamp desc, log_index desc
           limit 25
@@ -397,4 +407,12 @@ export class FleetDb {
   async close() {
     await this.pool.end()
   }
+}
+
+const quoteIdentifier = (value: string) => {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new Error(`Invalid schema name: ${value}`)
+  }
+
+  return `"${value}"`
 }

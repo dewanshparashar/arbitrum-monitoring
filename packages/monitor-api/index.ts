@@ -12,6 +12,10 @@ export const getApiConfig = () =>
         default: Number(process.env.MONITOR_API_PORT || 4010),
       },
       postgresUrl: { type: 'string', default: process.env.POSTGRES_URL },
+      databaseSchema: {
+        type: 'string',
+        default: process.env.DATABASE_SCHEMA || 'public',
+      },
       corsOrigin: {
         type: 'string',
         default: process.env.MONITOR_API_CORS_ORIGIN || '*',
@@ -54,7 +58,7 @@ export const createApiServer = (fleetDb?: FleetDbLike, corsOrigin = '*') =>
 export const main = async () => {
   const options = getApiConfig()
   const fleetDb = options.postgresUrl
-    ? new FleetDb(options.postgresUrl)
+    ? new FleetDb(options.postgresUrl, options.databaseSchema)
     : undefined
   const server = createApiServer(fleetDb, options.corsOrigin)
 

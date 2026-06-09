@@ -82,7 +82,7 @@ The portal refresh script currently uses public RPC defaults for parent chains a
 - `monitor-indexer` is the long-running process that talks to parent-chain RPCs and writes rows into Postgres or Supabase Postgres.
 - `monitor-api` reads those indexed tables and serves JSON to the frontend.
 - `monitor-web` is static and never populates the database itself.
-- Vercel should host the API and web app. The indexer should run separately on your machine or on a dedicated worker host.
+- Vercel can host the API and web app directly against Supabase while the indexer runs separately on your machine or on a dedicated worker host.
 
 ## Product notes
 
