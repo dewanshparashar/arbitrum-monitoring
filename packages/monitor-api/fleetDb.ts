@@ -90,11 +90,7 @@ const parentChainNames: Record<number, string> = {
 
 const formatStatus = (value: HealthStatus) => value
 
-const getPortalSnapshotPath = () =>
-  path.resolve(
-    __dirname,
-    '../../monitor-indexer/src/generated/portalMainnet.json'
-  )
+const getPortalSnapshotPath = () => path.resolve(__dirname, './portalMainnet.json')
 
 let cachedPortalSnapshot: PortalSnapshot | null = null
 
@@ -209,7 +205,10 @@ export class FleetDb {
     connectionString: string,
     schema = process.env.DATABASE_SCHEMA || 'public'
   ) {
-    this.pool = new Pool({ connectionString })
+    this.pool = new Pool({
+      connectionString,
+      max: Number(process.env.MONITOR_API_PG_POOL_MAX || 1),
+    })
     const qualifiedSchema = quoteIdentifier(schema)
     this.batchDeliveriesTable = `${qualifiedSchema}.batch_deliveries`
     this.assertionEventsTable = `${qualifiedSchema}.assertion_events`
