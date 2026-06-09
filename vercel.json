@@ -1,0 +1,34 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "yarn install --frozen-lockfile",
+  "buildCommand": "yarn workspace monitor-api build && yarn workspace monitor-web build",
+  "outputDirectory": "packages/monitor-web/dist",
+  "cleanUrls": true,
+  "functions": {
+    "api/v1.ts": {
+      "maxDuration": 10
+    }
+  },
+  "headers": [
+    {
+      "source": "/config.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/health",
+      "destination": "/api/v1?pathname=/health"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/v1?pathname=/api/:path*"
+    }
+  ]
+}

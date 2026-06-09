@@ -1,132 +1,77 @@
 # Arbitrum Monitoring
 
-## Overview
+This repo now has an indexed fleet register path for Orbit mainnet chains.
 
-This monitoring suite helps you track the health and performance of your Arbitrum chains through three specialized monitors:
+## What ships here
 
-1. [**Retryable Monitor**](./packages/retryable-monitor/README.md) - Tracks ParentChain->ChildChain message execution and retryable ticket lifecycle
-2. [**Batch Poster Monitor**](./packages/batch-poster-monitor/README.md) - Monitors batch posting and data availability
-3. [**Assertion Monitor**](./packages/assertion-monitor/README.md) - Monitor assertion creation and validation on Arbitrum chains
+- `packages/monitor-indexer`: a Ponder indexer that derives its chain list from the latest portal `orbitChainsData.json` snapshot and indexes an 8-day window
+- `packages/monitor-api`: a read-only API backed by Postgres
+- `packages/monitor-web`: a static fleet register UI that only talks to the API
 
-Each monitor has its own detailed documentation with technical specifics and implementation details.
+The original per-monitor packages are still in the repo as reference logic for the `R/B/A` decision tree, but the product path in this PR is indexer-first.
 
-## Prerequisites
+## Indexed sources
 
-- Node.js v18 or greater
-- Yarn package manager
-- Access to Arbitrum chain RPC endpoints
-- Access to parent chain RPC endpoints
-- Slack workspace for alerts (optional)
+The fleet indexer currently derives all mainnet chains from the portal snapshot and indexes:
 
-## Installation
+- `SequencerBatchDelivered` on each parent chain `SequencerInbox`
+- assertion events on each parent chain `Rollup`
+- retryable creation events on each parent chain `Bridge`
 
-1. Clone and install dependencies:
+The generated portal snapshot lives at [packages/monitor-indexer/src/generated/portalMainnet.json](./packages/monitor-indexer/src/generated/portalMainnet.json).
+
+## Local run
+
+Install dependencies:
 
 ```bash
-git clone https://github.com/OffchainLabs/arbitrum-monitoring.git
-cd arbitrum-monitoring
 yarn install
 ```
 
-## Configuration
-
-### Chain Configuration
-
-1. Copy and edit the config file:
+Refresh the mainnet portal snapshot and 8-day start blocks:
 
 ```bash
-cp config.example.json config.json
+yarn monitor-indexer:refresh-portal
 ```
 
-2. Configure your chains in `config.json`:
-
-```json
-{
-  "childChains": [
-    {
-      "name": "Your Chain Name",
-      "chainId": 421614,
-      "parentChainId": 11155111,
-      "confirmPeriodBlocks": 45818,
-      "parentRpcUrl": "https://your-parent-chain-rpc",
-      "orbitRpcUrl": "https://your-chain-rpc",
-      "ethBridge": {
-        "bridge": "0x...",
-        "inbox": "0x...",
-        "outbox": "0x...",
-        "rollup": "0x...",
-        "sequencerInbox": "0x..."
-      }
-    }
-  ]
-}
-```
-
-### Alert Configuration
-
-1. Copy and configure the environment file:
+Start the indexer against Postgres:
 
 ```bash
-cp .env.sample .env
+POSTGRES_URL=postgres://... yarn monitor-indexer
 ```
 
-2. Set up Slack alerts in `.env` (optional):
+Start the API:
 
 ```bash
-NODE_ENV=CI
-RETRYABLE_MONITORING_SLACK_TOKEN=your-slack-token
-RETRYABLE_MONITORING_SLACK_CHANNEL=your-slack-channel
-BATCH_POSTER_MONITORING_SLACK_TOKEN=your-slack-token
-BATCH_POSTER_MONITORING_SLACK_CHANNEL=your-slack-channel
-ASSERTION_MONITORING_SLACK_TOKEN=your-slack-token
-ASSERTION_MONITORING_SLACK_CHANNEL=your-slack-channel
+POSTGRES_URL=postgres://... yarn monitor-api
 ```
 
-Required environment variables:
-
-- `RETRYABLE_MONITORING_NOTION_TOKEN`: Notion API token for database integration
-- `RETRYABLE_MONITORING_NOTION_DB_ID`: Notion database ID for storing retryable tickets
-
-## Usage
-
-All monitors support these base options:
-
-- `--configPath`: Path to configuration file (default: "config.json")
-- `--enableAlerting`: Enable Slack alerts (default: false)
-
-### Quick Start Commands
+Start the web app:
 
 ```bash
-# Monitor retryable tickets
-yarn retryable-monitor [options]
-
-# Monitor batch posting
-yarn batch-poster-monitor [options]
-
-# Monitor chain assertions
-yarn assertion-monitor [options]
+yarn monitor-web
 ```
 
-See individual monitor READMEs for specific options and features:
+Default local URLs:
 
-- [Retryable Monitor Details](./packages/retryable-monitor/README.md)
-- [Batch Poster Monitor Details](./packages/batch-poster-monitor/README.md)
-- [Assertion Monitor Details](./packages/assertion-monitor/README.md)
+- web: `http://localhost:4020`
+- api: `http://localhost:4010`
 
-### Notion Integration
+## Environment
 
-When `--writeToNotion` is enabled, the monitor will:
+The indexed product path is env-driven:
 
-- Create new pages in the Notion database for each retryable ticket
-- Update existing pages when ticket status changes
-- Run a daily sweep to mark expired tickets
-- Track ticket status, creation time, expiration time, and transaction hashes
+- `POSTGRES_URL`
+- `MONITOR_API_HOST`
+- `MONITOR_API_PORT`
+- `MONITOR_API_CORS_ORIGIN`
 
-The Notion database should have the following properties:
+The portal refresh script currently uses public RPC defaults for parent chains and can be overridden in code if we want to move those into env vars next.
 
-- Ticket ID (title)
-- Status (select)
-- Created At (date)
-- Expires At (date)
-- Transaction Hash (url)
-- Last Updated (date)
+## Product notes
+
+- The fleet table is intentionally driven from indexed reads only. It does not fetch chain state on page load.
+- `R/B/A` are derived from the existing retryable, batch poster, and assertion monitoring logic, but reduced into a simple fleet register view.
+- `RPC Uptime`, `Latency`, `Bridged TVL`, and `Pending Out` are scaffolded in the UI and called out in the design note below because they need separate indexed datasets.
+
+See [docs/fleet-register.md](./docs/fleet-register.md) for the current model and the next indexing passes.

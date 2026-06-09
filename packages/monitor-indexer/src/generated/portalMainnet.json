@@ -1,0 +1,484 @@
+{
+  "generatedAt": "2026-06-09T12:31:53.302Z",
+  "maxLookbackDays": 8,
+  "portalMainnetChains": [
+    {
+      "chainId": 660279,
+      "name": "Xai",
+      "slug": "xai",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://xai-chain.net/rpc",
+      "explorerUrl": "https://explorer.xai-chain.net",
+      "ethBridge": {
+        "bridge": "0x7dd8A76bdAeBE3BBBaCD7Aa87f1D4FDa1E60f94f",
+        "rollup": "0xC47DacFbAa80Bd9D8112F4e8069482c2A3221336",
+        "sequencerInbox": "0x995a9d3ca121D48d21087eDE20bc8acb2398c8B1"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 1380012617,
+      "name": "RARI Mainnet",
+      "slug": "rari-mainnet",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://mainnet.rpc.rarichain.org/http",
+      "explorerUrl": "https://mainnet.explorer.rarichain.org",
+      "ethBridge": {
+        "bridge": "0x255f80Ef2F09FCE0944faBb292b8510F01316Cf0",
+        "rollup": "0x2e988Ea0873C9d712628F0bf38DAFdE754927C89",
+        "sequencerInbox": "0xA436f1867adD490BF1530c636f2FB090758bB6B3"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 55244,
+      "name": "Superposition",
+      "slug": "superposition",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 40320,
+      "rpcUrl": "https://rpc.superposition.so",
+      "explorerUrl": "https://explorer.superposition.so",
+      "ethBridge": {
+        "bridge": "0xEca0fEB4aA6112a3923823559e7197294Bc49CC7",
+        "rollup": "0xf3C4a84a948658D012C915Ad4bb4b501F6C3c075",
+        "sequencerInbox": "0xe0064A9fb8e45BfD8e5aB1cE7523888814A096E0"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 6300,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 228,
+      "name": "Mind Network",
+      "slug": "mind-network",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 7200,
+      "rpcUrl": "https://rpc-mainnet-internal.mindnetwork.xyz",
+      "explorerUrl": "https://explorer.mindnetwork.xyz",
+      "ethBridge": {
+        "bridge": "0x34F81F9C4F3227DbaCcFF8E51DBaa1571e114759",
+        "rollup": "0x435CEf963dE6CC2241da6f09CE6Bb3600cF259a9",
+        "sequencerInbox": "0xD00d2ef101d86C570dA8f38801f236b79a7a2A93"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 4162,
+      "name": "SX",
+      "slug": "sx",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://rpc-rollup.sx.technology",
+      "explorerUrl": "https://explorerl2.sx.technology",
+      "ethBridge": {
+        "bridge": "0xa104C0426e95a5538e89131DbB4163d230C35f86",
+        "rollup": "0x36c6C69A6186D4475fc5c21181CD980Bd6E5e11F",
+        "sequencerInbox": "0xD80a805c86C14c879420eC6acb366D04D318fC0C"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 900,
+        "fastWithdrawalTime": 43200000
+      }
+    },
+    {
+      "chainId": 33139,
+      "name": "ApeChain",
+      "slug": "apechain",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://apechain.calderachain.xyz/http",
+      "explorerUrl": "https://apescan.io",
+      "ethBridge": {
+        "bridge": "0x6B71AFb4b7725227ab944c96FE018AB9dc0434b8",
+        "rollup": "0x374de579AE15aD59eD0519aeAf1A23F348Df259c",
+        "sequencerInbox": "0xE6a92Ae29E24C343eE66A2B3D3ECB783d65E4a3C"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 1625,
+      "name": "Gravity Alpha",
+      "slug": "gravity-alpha",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 40320,
+      "rpcUrl": "https://rpc.gravity.xyz",
+      "explorerUrl": "https://explorer.gravity.xyz",
+      "ethBridge": {
+        "bridge": "0x7983403dDA368AA7d67145a9b81c5c517F364c42",
+        "rollup": "0x2807B1d5d94ca823ca7d8642A5F5DDac120ce48f",
+        "sequencerInbox": "0x8D99372612e8cFE7163B1a453831Bc40eAeb3cF3"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 86400,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 41923,
+      "name": "Edu Chain",
+      "slug": "edu-chain",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://rpc.edu-chain.raas.gelato.cloud",
+      "explorerUrl": "https://educhain.blockscout.com",
+      "ethBridge": {
+        "bridge": "0x2F12c50b46adB01a4961AdDa5038c0974C7C78e8",
+        "rollup": "0xBaE3B462a2A7fb758F66D91170514C10B14Ce914",
+        "sequencerInbox": "0xA3464bf0ed52cFe6676D3e34ab1F4DF53f193631"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": 3600000
+      }
+    },
+    {
+      "chainId": 88899,
+      "name": "Unite Mainnet",
+      "slug": "unite-mainnet",
+      "parentChainId": 8453,
+      "confirmPeriodBlocks": 274908,
+      "rpcUrl": "https://unite-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://unite-mainnet.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0x80b4c2dBEacFF9921cD456e5E1489919185b8a1d",
+        "rollup": "0xd6df93D93c2554412622C567965DA7B16929f0A5",
+        "sequencerInbox": "0x3A2898B10c88cb619635efdC027538D7Aa99BF79"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": null,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 51828,
+      "name": "ChainBounty",
+      "slug": "chainbounty",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 40320,
+      "rpcUrl": "https://rpc.chainbounty.io",
+      "explorerUrl": "https://scan.chainbounty.io/",
+      "ethBridge": {
+        "bridge": "0xd46AB997110a91C4CB6f4576ffE6769a3033622A",
+        "rollup": "0xc905b1F4e9fFcC21a58B430FBa06d07203F641E1",
+        "sequencerInbox": "0x6CBf221c8cc7E2B9De4bce3a5c75378591Bdf8Ea"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 135000,
+        "fastWithdrawalTime": 3600000
+      }
+    },
+    {
+      "chainId": 92278,
+      "name": "Miracle Chain",
+      "slug": "miracle-chain",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 40320,
+      "rpcUrl": "https://rpc-miracle-chain-dqfxgxhidy.t.conduit.xyz",
+      "explorerUrl": "https://explorer-miracle-chain-dqfxgxhidy.t.conduit.xyz/",
+      "ethBridge": {
+        "bridge": "0xaF25849aEb040bEab7a0c783fc6861d26aE49796",
+        "rollup": "0x0DA5198b8ae8aE9354061649D08BE1c53ec8a377",
+        "sequencerInbox": "0x21f9c31eD91612B48A8ae450Bdd0f19F8f5Bea40"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 41400,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 98866,
+      "name": "Plume Mainnet",
+      "slug": "plume-mainnet",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 40320,
+      "rpcUrl": "https://rpc.plume.org",
+      "explorerUrl": "https://explorer.plume.org",
+      "ethBridge": {
+        "bridge": "0x35381f63091926750F43b2A7401B083263aDEF83",
+        "rollup": "0x4eD3F488a5a4417839BbC39712EB76D8Aaee6eE8",
+        "sequencerInbox": "0x85eC1b9138a8b9659A51e2b51bb0861901040b59"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 86400,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 6985385,
+      "name": "Humanity Mainnet",
+      "slug": "humanity-mainnet",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://humanity-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://humanity-mainnet.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0x8620F893F6321C31909e4a58bcEb6948A289e0fD",
+        "rollup": "0x4ef3463F0Ffc1E9bfe30f72D705C259A0A0cCb56",
+        "sequencerInbox": "0xa80dD081B83399614fa0BB497174Bdcb3EF4Efe6"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 613419,
+      "name": "Galactica Mainnet",
+      "slug": "galactica-mainnet",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 50400,
+      "rpcUrl": "https://galactica-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://galactica-mainnet.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0xd75a60aFcBC113C1c76e42184663Da141f839053",
+        "rollup": "0xf3B30Fd67211C57e2Cc36D5a41dB28415AF55BB7",
+        "sequencerInbox": "0x2fccc2de02Dd598E14403C4151F192d962E646Ba"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 32766,
+      "name": "Earnm Mainnet",
+      "slug": "earnm-mainnet",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://earnm-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://earnm-mainnet.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0xA9F4ee72439afC704db48dc049CbFb7E914aD300",
+        "rollup": "0xc930fd48846e956b308f28524dA2d5E14c832e33",
+        "sequencerInbox": "0x38d41Ac2fbc3f13FcA7838F6638D8FbDb189e807"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 1628,
+      "name": "T-REX",
+      "slug": "t-rex",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 7200,
+      "rpcUrl": "https://rpc.trex.xyz",
+      "explorerUrl": "https://explorer.trex.xyz",
+      "ethBridge": {
+        "bridge": "0x61C4b51f9388A2DD62C791341f0d50AD88d64Fd4",
+        "rollup": "0x7705e53B707AF758aCEa86580d5da155d2fB2921",
+        "sequencerInbox": "0xfF3e828FD206bD8491A7C77ABfb128860D314b6B"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 190415,
+      "name": "HPP Mainnet",
+      "slug": "hpp-mainnet",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 40320,
+      "rpcUrl": "https://mainnet.hpp.io",
+      "explorerUrl": "https://explorer.hpp.io/",
+      "ethBridge": {
+        "bridge": "0x9948eDFBb9e0b104bAd60393dBe79d0BC7937014",
+        "rollup": "0x8361fC54C99AdDbeD390Af68e7e6115323AB8DB1",
+        "sequencerInbox": "0x9B26957a661bc862FA0d7eb21813Aa008d0Cc6E6"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 128700,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 241320162,
+      "name": "XMTP Mainnet",
+      "slug": "xmtp-mainnet",
+      "parentChainId": 8453,
+      "confirmPeriodBlocks": 302400,
+      "rpcUrl": "https://xmtp-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://xmtp-mainnet.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0xA9C3B7672C477EeDA999A3ab1c8Eec28DEEB7d41",
+        "rollup": "0xB6B4C28278FbBF444Ff7B6dF8fEdB7Bc90f72924",
+        "sequencerInbox": "0x5107C4267F13D0e55eab45A3129DB04AE8BB1AF3"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": 3600000
+      }
+    },
+    {
+      "chainId": 869,
+      "name": "World Mobile Chain Mainnet",
+      "slug": "world-mobile-chain-mainnet",
+      "parentChainId": 8453,
+      "confirmPeriodBlocks": 302400,
+      "rpcUrl": "https://worldmobilechain-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://explorer.worldmobile.io/",
+      "ethBridge": {
+        "bridge": "0x249888c93F18f50a0EcA6a29b644F8Fa1Ff7539d",
+        "rollup": "0x6Db7d43375720FFf98A50841ddddc80ACB07d969",
+        "sequencerInbox": "0x3Ba9426AcC831cDDa0Dd0b537f6b4E98670Bf280"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 510,
+      "name": "Syndicate Network",
+      "slug": "syndicate-network",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 50400,
+      "rpcUrl": "https://synd-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://synd-mainnet.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0x3C8cF0ae6E89AC0796f29B3a58e7dEa1cD072277",
+        "rollup": "0x451bD7813909B899DA6EbEC55E8fF823c057e14A",
+        "sequencerInbox": "0x12ad349e5d72B582856290736e0f13FE5fA57Aa4"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 3343,
+      "name": "Edge Mainnet",
+      "slug": "edge-mainnet",
+      "parentChainId": 42161,
+      "confirmPeriodBlocks": 50400,
+      "rpcUrl": "https://edge-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://edge-mainnet.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0x6F4836aFD5e21EDcee9b838C5a4125829EC198d0",
+        "rollup": "0x14FdC47483e79d5A76599a74A2D622DA1cf97BBF",
+        "sequencerInbox": "0xe44B83D8a3A86994043C809E29B723a44FAEE479"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 900,
+        "fastWithdrawalTime": 180000
+      }
+    },
+    {
+      "chainId": 680,
+      "name": "JasmyChain",
+      "slug": "jasmychain",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 6000,
+      "rpcUrl": "https://jasmychain-mainnet.alt.technology",
+      "explorerUrl": "https://explorer.jasmyscan.net",
+      "ethBridge": {
+        "bridge": "0x546bd55bF4f3F05810f14eea894cEaB8Cb58F1EA",
+        "rollup": "0x1ad4DEDFe0D975D2b547aBD607194750aA7f6310",
+        "sequencerInbox": "0x37C6a6d9986542844D156F852A0047F7592b06fa"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 24300,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 846737,
+      "name": "Panax Mainnet",
+      "slug": "panax-mainnet",
+      "parentChainId": 8453,
+      "confirmPeriodBlocks": 302400,
+      "rpcUrl": "https://panax-mainnet.g.alchemy.com/public",
+      "explorerUrl": "https://www.panaxscan.com",
+      "ethBridge": {
+        "bridge": "0x9d4AB2E611a7b9Fdc0168C4C1EEd563eba35A43D",
+        "rollup": "0xB6192CB8E2acBb34Ca83c7a39161CE207fEf4b5C",
+        "sequencerInbox": "0x9fE4399563Cb6e1Bbb0947d51420Dbb725b16ffE"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 900,
+        "fastWithdrawalTime": 900000
+      }
+    },
+    {
+      "chainId": 7869,
+      "name": "Powerloom Mainnet V2",
+      "slug": "powerloom-mainnet-v2",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 40320,
+      "rpcUrl": "https://rpc-v2.powerloom.network",
+      "explorerUrl": "https://explorer-v2.powerloom.network/",
+      "ethBridge": {
+        "bridge": "0x53b168016aA2E3469B5D76315311aAC4Ce0020DB",
+        "rollup": "0xc3196FEE2b194bf699076865060d566c7Cb02892",
+        "sequencerInbox": "0x903Af716AA8C7C27Fd785F453D5a59C20E06bDeC"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 20700,
+        "fastWithdrawalTime": 86400000
+      }
+    },
+    {
+      "chainId": 20010,
+      "name": "Mandala Chain",
+      "slug": "mandala-chain",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 6000,
+      "rpcUrl": "https://rpc1-mainnet.mandalachain.io",
+      "explorerUrl": "https://explorer.mandalachain.io",
+      "ethBridge": {
+        "bridge": "0x65DB181838b53f32428ce106fA5355b7e4806b79",
+        "rollup": "0x218D35154D1efEBFC46D64451C9495288219b275",
+        "sequencerInbox": "0x325acf46079d3f750D5D7E6182E094B1fD0AC2F4"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 18000,
+        "fastWithdrawalTime": null
+      }
+    },
+    {
+      "chainId": 704851,
+      "name": "Mars Chain Mainnet",
+      "slug": "mars-chain-mainnet",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 7200,
+      "rpcUrl": "https://rpc.mars-scan.io",
+      "explorerUrl": "https://explorer.mars-chain.io",
+      "ethBridge": {
+        "bridge": "0x8b4Fea8C461178b88764BDd1ED55511ADe8ED2D0",
+        "rollup": "0xFe4c435944aa9530E3A2F8A0B7561838Ba89E249",
+        "sequencerInbox": "0x357B846f75c0AAF643f94c9b26f050eAE843Cb28"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": null,
+        "fastWithdrawalTime": null
+      }
+    }
+  ],
+  "portalParentChainIds": [
+    1,
+    8453,
+    42161
+  ],
+  "parentStartBlocks": {
+    "1": 25222286,
+    "8453": 46763882,
+    "42161": 468921887
+  }
+}

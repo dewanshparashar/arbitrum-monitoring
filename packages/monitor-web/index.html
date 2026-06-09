@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Arbitrum Fleet Register</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <main class="page">
+      <header class="header">
+        <div>
+          <h1>Arbitrum Fleet Register</h1>
+          <p class="muted">Mainnet Orbit monitoring backed by indexed 8-day event windows.</p>
+        </div>
+        <form id="api-form" class="api-form">
+          <label>
+            API base URL
+            <input id="api-base" type="text" placeholder="http://localhost:4010" />
+          </label>
+          <button type="submit">Save</button>
+          <button id="refresh-button" type="button">Refresh</button>
+        </form>
+      </header>
+
+      <p id="status" class="status">Loading…</p>
+
+      <section class="panel">
+        <div id="overview"></div>
+      </section>
+
+      <section class="panel">
+        <div id="chains"></div>
+      </section>
+
+      <section class="panel">
+        <div id="detail"></div>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

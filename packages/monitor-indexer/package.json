@@ -1,0 +1,23 @@
+{
+  "name": "monitor-indexer",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@arbitrum/sdk": "^4.0.0",
+    "hono": "^4.12.25",
+    "ponder": "^0.16.6",
+    "utils": "*",
+    "viem": "^2.7.9"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.1",
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "refresh-portal": "node ./scripts/refreshPortalSnapshot.mjs",
+    "build": "PONDER_TELEMETRY_DISABLED=1 ponder codegen",
+    "dev": "PONDER_TELEMETRY_DISABLED=1 ponder dev",
+    "start": "PONDER_TELEMETRY_DISABLED=1 ponder start",
+    "test": "PONDER_TELEMETRY_DISABLED=1 ponder codegen"
+  }
+}

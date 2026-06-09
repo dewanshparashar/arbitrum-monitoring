@@ -1,0 +1,22 @@
+{
+  "name": "monitor-api",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "pg": "^8.13.1",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.1",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.4.5",
+    "vitest": "^3.0.5"
+  },
+  "scripts": {
+    "build": "rm -rf ./dist && tsc",
+    "lint": "eslint .",
+    "dev": "yarn build && node ./dist/main.js",
+    "test": "vitest run __test__/*.test.ts"
+  }
+}

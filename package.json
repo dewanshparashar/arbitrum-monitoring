@@ -10,6 +10,10 @@
     "retryable-monitor": "yarn workspace retryable-monitor dev",
     "batch-poster-monitor": "yarn workspace batch-poster-monitor dev",
     "assertion-monitor": "yarn workspace assertion-monitor dev",
+    "monitor-indexer": "yarn workspace monitor-indexer dev",
+    "monitor-indexer:refresh-portal": "yarn workspace monitor-indexer refresh-portal",
+    "monitor-api": "yarn workspace monitor-api dev",
+    "monitor-web": "yarn workspace monitor-web dev",
     "test": "yarn workspace utils build && vitest"
   },
   "devDependencies": {

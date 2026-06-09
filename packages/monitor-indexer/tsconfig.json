@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ES2022",
+    "noEmit": true
+  },
+  "include": [
+    "ponder.config.ts",
+    "ponder.schema.ts",
+    "src/**/*.ts"
+  ]
+}
