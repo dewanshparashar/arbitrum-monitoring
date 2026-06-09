@@ -1,0 +1,552 @@
+import { Pool } from 'pg'
+import yargs from 'yargs'
+import { getMainnetChains, getParentRpcUrls, type PortalMainnetChain } from './portal'
+import {
+  arbSysAddress,
+  decodeL2ToL1Log,
+  decodeOutboxLog,
+  findBlockByTimestamp,
+  getBalance,
+  getBlockNumber,
+  getLogs,
+  l2ToL1Topic,
+  outboxExecutedTopic,
+  probeRpc,
+  readActiveOutbox,
+} from './rpc'
+
+const eightDaysSeconds = 8 * 24 * 60 * 60
+const zeroAddress = '0x0000000000000000000000000000000000000000'
+
+const readConfig = () =>
+  yargs(process.argv.slice(2))
+    .options({
+      postgresUrl: { type: 'string', default: process.env.POSTGRES_URL },
+      databaseSchema: {
+        type: 'string',
+        default: process.env.DATABASE_SCHEMA || 'public',
+      },
+      intervalSeconds: {
+        type: 'number',
+        default: Number(process.env.MONITOR_METRICS_INTERVAL_SECONDS || 300),
+      },
+      logChunkSize: {
+        type: 'number',
+        default: Number(process.env.MONITOR_METRICS_LOG_CHUNK_SIZE || 20000),
+      },
+    })
+    .strict()
+    .parseSync()
+
+const normalizeSchemaName = (value: string) => {
+  const schema = value.trim() || 'public'
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schema)) {
+    throw new Error(`Invalid database schema "${value}"`)
+  }
+
+  return schema
+}
+
+const tableName = (schemaName: string, table: string) => `"${schemaName}"."${table}"`
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+class MetricsDb {
+  private readonly pool: Pool
+  private readonly schemaName: string
+
+  private readonly stateTable: string
+  private readonly rpcChecksTable: string
+  private readonly balanceSnapshotsTable: string
+  private readonly pricesTable: string
+  private readonly exitsTable: string
+
+  constructor(connectionString: string, schemaName: string) {
+    this.pool = new Pool({
+      connectionString,
+      max: Number(process.env.PG_POOL_MAX || 3),
+    })
+    this.schemaName = normalizeSchemaName(schemaName)
+    this.stateTable = tableName(this.schemaName, 'metric_worker_state')
+    this.rpcChecksTable = tableName(this.schemaName, 'rpc_checks')
+    this.balanceSnapshotsTable = tableName(this.schemaName, 'native_balance_snapshots')
+    this.pricesTable = tableName(this.schemaName, 'asset_prices')
+    this.exitsTable = tableName(this.schemaName, 'exit_messages')
+  }
+
+  async init() {
+    await this.pool.query(`create schema if not exists "${this.schemaName}"`)
+    await this.pool.query(`
+      create table if not exists ${this.stateTable} (
+        key text primary key,
+        value text not null,
+        updated_at timestamptz not null default now()
+      )
+    `)
+    await this.pool.query(`
+      create table if not exists ${this.rpcChecksTable} (
+        id bigserial primary key,
+        chain_id bigint not null,
+        checked_at timestamptz not null,
+        ok boolean not null,
+        latency_ms integer,
+        error_code text
+      )
+    `)
+    await this.pool.query(`
+      create table if not exists ${this.balanceSnapshotsTable} (
+        id bigserial primary key,
+        chain_id bigint not null,
+        asset_key text not null,
+        block_number numeric(78, 0) not null,
+        balance_wei numeric(78, 0) not null,
+        checked_at timestamptz not null
+      )
+    `)
+    await this.pool.query(`
+      create table if not exists ${this.pricesTable} (
+        id bigserial primary key,
+        asset_key text not null,
+        price_usd numeric(20, 8) not null,
+        checked_at timestamptz not null
+      )
+    `)
+    await this.pool.query(`
+      create table if not exists ${this.exitsTable} (
+        id text primary key,
+        chain_id bigint not null,
+        parent_chain_id bigint not null,
+        position numeric(78, 0) not null,
+        value_wei numeric(78, 0) not null,
+        started_at timestamptz not null,
+        started_tx_hash text not null,
+        child_block_number numeric(78, 0) not null,
+        child_log_index integer not null,
+        executed_at timestamptz,
+        executed_tx_hash text
+      )
+    `)
+  }
+
+  async getState(key: string) {
+    const result = await this.pool.query<{ value: string }>(
+      `select value from ${this.stateTable} where key = $1`,
+      [key]
+    )
+    return result.rows[0]?.value ?? null
+  }
+
+  async setState(key: string, value: string) {
+    await this.pool.query(
+      `
+        insert into ${this.stateTable} (key, value, updated_at)
+        values ($1, $2, now())
+        on conflict (key) do update
+        set value = excluded.value,
+            updated_at = excluded.updated_at
+      `,
+      [key, value]
+    )
+  }
+
+  async insertRpcCheck(row: {
+    chainId: number
+    checkedAt: string
+    ok: boolean
+    latencyMs: number | null
+    errorCode: string | null
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.rpcChecksTable}
+          (chain_id, checked_at, ok, latency_ms, error_code)
+        values ($1, $2, $3, $4, $5)
+      `,
+      [row.chainId, row.checkedAt, row.ok, row.latencyMs, row.errorCode]
+    )
+  }
+
+  async insertBalanceSnapshot(row: {
+    chainId: number
+    assetKey: string
+    blockNumber: string
+    balanceWei: string
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.balanceSnapshotsTable}
+          (chain_id, asset_key, block_number, balance_wei, checked_at)
+        values ($1, $2, $3, $4, $5)
+      `,
+      [row.chainId, row.assetKey, row.blockNumber, row.balanceWei, row.checkedAt]
+    )
+  }
+
+  async insertPrice(row: { assetKey: string; priceUsd: number; checkedAt: string }) {
+    await this.pool.query(
+      `
+        insert into ${this.pricesTable} (asset_key, price_usd, checked_at)
+        values ($1, $2, $3)
+      `,
+      [row.assetKey, row.priceUsd, row.checkedAt]
+    )
+  }
+
+  async upsertExit(row: {
+    id: string
+    chainId: number
+    parentChainId: number
+    position: string
+    valueWei: string
+    startedAt: string
+    startedTxHash: string
+    childBlockNumber: string
+    childLogIndex: number
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.exitsTable}
+          (
+            id,
+            chain_id,
+            parent_chain_id,
+            position,
+            value_wei,
+            started_at,
+            started_tx_hash,
+            child_block_number,
+            child_log_index
+          )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        on conflict (id) do nothing
+      `,
+      [
+        row.id,
+        row.chainId,
+        row.parentChainId,
+        row.position,
+        row.valueWei,
+        row.startedAt,
+        row.startedTxHash,
+        row.childBlockNumber,
+        row.childLogIndex,
+      ]
+    )
+  }
+
+  async markExitExecuted(row: {
+    chainId: number
+    position: string
+    executedAt: string
+    executedTxHash: string
+  }) {
+    await this.pool.query(
+      `
+        update ${this.exitsTable}
+        set executed_at = $3,
+            executed_tx_hash = $4
+        where chain_id = $1
+          and position = $2
+          and executed_at is null
+      `,
+      [row.chainId, row.position, row.executedAt, row.executedTxHash]
+    )
+  }
+
+  async prune() {
+    await this.pool.query(
+      `delete from ${this.rpcChecksTable} where checked_at < now() - interval '8 days'`
+    )
+    await this.pool.query(
+      `delete from ${this.balanceSnapshotsTable} where checked_at < now() - interval '8 days'`
+    )
+    await this.pool.query(
+      `delete from ${this.pricesTable} where checked_at < now() - interval '8 days'`
+    )
+    await this.pool.query(
+      `delete from ${this.exitsTable} where started_at < now() - interval '8 days'`
+    )
+  }
+
+  async close() {
+    await this.pool.end()
+  }
+}
+
+const readJson = async <T>(url: string) => {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`http_${response.status}`)
+  }
+
+  return (await response.json()) as T
+}
+
+const fetchEthereumPriceUsd = async () => {
+  const body = await readJson<{ ethereum?: { usd?: number } }>(
+    'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd'
+  )
+  const priceUsd = body.ethereum?.usd
+  return typeof priceUsd === 'number' ? priceUsd : null
+}
+
+const readCursor = async ({
+  db,
+  key,
+  rpcUrl,
+  fallbackSeconds,
+}: {
+  db: MetricsDb
+  key: string
+  rpcUrl: string
+  fallbackSeconds: number
+}) => {
+  const existing = await db.getState(key)
+  if (existing) {
+    return BigInt(existing)
+  }
+
+  const block = await findBlockByTimestamp(rpcUrl, fallbackSeconds)
+  await db.setState(key, block.toString())
+  return block
+}
+
+const syncRpcChecks = async (db: MetricsDb) => {
+  const checkedAt = new Date().toISOString()
+  const chains = getMainnetChains()
+
+  await Promise.all(
+    chains.map(async chain => {
+      const probe = await probeRpc(chain.rpcUrl)
+      await db.insertRpcCheck({
+        chainId: chain.chainId,
+        checkedAt,
+        ok: probe.ok,
+        latencyMs: probe.latencyMs,
+        errorCode: probe.errorCode,
+      })
+    })
+  )
+}
+
+const syncBalances = async (db: MetricsDb) => {
+  const checkedAt = new Date().toISOString()
+  const parentRpcUrls = getParentRpcUrls()
+  const parentBlocks = new Map<number, bigint>()
+
+  await Promise.all(
+    getMainnetChains().map(async chain => {
+      const parentRpcUrl = parentRpcUrls[chain.parentChainId]
+      if (!parentRpcUrl) {
+        return
+      }
+
+      let blockNumber = parentBlocks.get(chain.parentChainId)
+      if (blockNumber === undefined) {
+        blockNumber = await getBlockNumber(parentRpcUrl)
+        parentBlocks.set(chain.parentChainId, blockNumber)
+      }
+
+      const balanceWei = await getBalance(parentRpcUrl, chain.ethBridge.bridge as `0x${string}`)
+      await db.insertBalanceSnapshot({
+        chainId: chain.chainId,
+        assetKey: 'ethereum',
+        blockNumber: blockNumber.toString(),
+        balanceWei: balanceWei.toString(),
+        checkedAt,
+      })
+    })
+  )
+}
+
+const syncEthereumPrice = async (db: MetricsDb) => {
+  const priceUsd = await fetchEthereumPriceUsd()
+  if (priceUsd === null) {
+    return
+  }
+
+  await db.insertPrice({
+    assetKey: 'ethereum',
+    priceUsd,
+    checkedAt: new Date().toISOString(),
+  })
+}
+
+const syncChildExitLogs = async ({
+  db,
+  chain,
+  chunkSize,
+  oldestSeconds,
+}: {
+  db: MetricsDb
+  chain: PortalMainnetChain
+  chunkSize: number
+  oldestSeconds: number
+}) => {
+  const stateKey = `child_exit_cursor:${chain.chainId}`
+  let fromBlock = await readCursor({
+    db,
+    key: stateKey,
+    rpcUrl: chain.rpcUrl,
+    fallbackSeconds: oldestSeconds,
+  })
+  const latestBlock = await getBlockNumber(chain.rpcUrl)
+
+  while (fromBlock <= latestBlock) {
+    const toBlock = fromBlock + BigInt(chunkSize - 1)
+    const endBlock = toBlock < latestBlock ? toBlock : latestBlock
+    const logs = await getLogs({
+      rpcUrl: chain.rpcUrl,
+      address: arbSysAddress,
+      topic: l2ToL1Topic,
+      fromBlock,
+      toBlock: endBlock,
+    })
+
+    for (const log of logs) {
+      const decoded = decodeL2ToL1Log(log)
+      if (decoded.value <= 0n) {
+        continue
+      }
+
+      await db.upsertExit({
+        id: `${chain.chainId}:${decoded.position}`,
+        chainId: chain.chainId,
+        parentChainId: chain.parentChainId,
+        position: decoded.position.toString(),
+        valueWei: decoded.value.toString(),
+        startedAt: new Date(decoded.startedAt * 1000).toISOString(),
+        startedTxHash: decoded.transactionHash,
+        childBlockNumber: decoded.blockNumber.toString(),
+        childLogIndex: decoded.logIndex,
+      })
+    }
+
+    fromBlock = endBlock + 1n
+    await db.setState(stateKey, fromBlock.toString())
+  }
+}
+
+const syncParentExitExecutions = async ({
+  db,
+  chain,
+  chunkSize,
+  oldestSeconds,
+}: {
+  db: MetricsDb
+  chain: PortalMainnetChain
+  chunkSize: number
+  oldestSeconds: number
+}) => {
+  const parentRpcUrl = getParentRpcUrls()[chain.parentChainId]
+  if (!parentRpcUrl) {
+    return
+  }
+
+  const outbox = await readActiveOutbox(
+    parentRpcUrl,
+    chain.ethBridge.bridge as `0x${string}`
+  )
+  if (!outbox || outbox.toLowerCase() === zeroAddress) {
+    return
+  }
+
+  const stateKey = `parent_exit_cursor:${chain.chainId}`
+  let fromBlock = await readCursor({
+    db,
+    key: stateKey,
+    rpcUrl: parentRpcUrl,
+    fallbackSeconds: oldestSeconds,
+  })
+  const latestBlock = await getBlockNumber(parentRpcUrl)
+
+  while (fromBlock <= latestBlock) {
+    const toBlock = fromBlock + BigInt(chunkSize - 1)
+    const endBlock = toBlock < latestBlock ? toBlock : latestBlock
+    const logs = await getLogs({
+      rpcUrl: parentRpcUrl,
+      address: outbox,
+      topic: outboxExecutedTopic,
+      fromBlock,
+      toBlock: endBlock,
+    })
+
+    for (const log of logs) {
+      const decoded = decodeOutboxLog(log)
+      await db.markExitExecuted({
+        chainId: chain.chainId,
+        position: decoded.position.toString(),
+        executedAt: new Date().toISOString(),
+        executedTxHash: decoded.transactionHash,
+      })
+    }
+
+    fromBlock = endBlock + 1n
+    await db.setState(stateKey, fromBlock.toString())
+  }
+}
+
+const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
+  const oldestSeconds = Math.floor(Date.now() / 1000) - eightDaysSeconds
+
+  for (const chain of getMainnetChains()) {
+    try {
+      await syncChildExitLogs({ db, chain, chunkSize, oldestSeconds })
+      await syncParentExitExecutions({ db, chain, chunkSize, oldestSeconds })
+    } catch (error) {
+      console.error(`exit sync failed for ${chain.slug}`, error)
+    }
+  }
+}
+
+const runCycle = async (db: MetricsDb, chunkSize: number) => {
+  await syncRpcChecks(db)
+
+  try {
+    await syncBalances(db)
+    await syncEthereumPrice(db)
+  } catch (error) {
+    console.error('balance sync failed', error)
+  }
+
+  await syncExitMessages(db, chunkSize)
+  await db.prune()
+}
+
+export const main = async () => {
+  const options = readConfig()
+  if (!options.postgresUrl) {
+    throw new Error('POSTGRES_URL is required.')
+  }
+
+  const db = new MetricsDb(options.postgresUrl, options.databaseSchema)
+  await db.init()
+
+  const intervalMs = Math.max(options.intervalSeconds, 30) * 1000
+
+  const close = async () => {
+    await db.close()
+  }
+
+  process.on('SIGINT', () => {
+    close().then(() => process.exit(0))
+  })
+
+  process.on('SIGTERM', () => {
+    close().then(() => process.exit(0))
+  })
+
+  while (true) {
+    const startedAt = Date.now()
+
+    try {
+      await runCycle(db, Math.max(options.logChunkSize, 100))
+      console.log(`monitor-metrics cycle complete in ${Date.now() - startedAt}ms`)
+    } catch (error) {
+      console.error('monitor-metrics cycle failed', error)
+    }
+
+    await sleep(intervalMs)
+  }
+}

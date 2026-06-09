@@ -53,6 +53,32 @@ type RetryableSummaryRow = {
   expired_count: string
 }
 
+type RpcSummaryRow = {
+  chain_id: number
+  total_count: string
+  ok_count: string
+  latency_ms: number | null
+  last_checked_at: number | null
+}
+
+type BalanceSummaryRow = {
+  chain_id: number
+  asset_key: string
+  balance_wei: string
+  previous_balance_wei: string | null
+}
+
+type PriceRow = {
+  asset_key: string
+  price_usd: string
+}
+
+type PendingExitSummaryRow = {
+  chain_id: number
+  pending_count: string
+  pending_value_wei: string
+}
+
 type FleetChain = {
   chainId: number
   chainName: string
@@ -75,10 +101,15 @@ type FleetChain = {
   openRetryCount: number
   openRetryUrgentCount: number
   expiredRetryableCount: number
-  rpcScore: null
-  latencyMs: null
-  bridgedTvlUsd: null
-  pendingOutUsd: null
+  rpcScore: number | null
+  rpcChecks8d: number
+  lastRpcCheckedAt: number | null
+  latencyMs: number | null
+  nativeAssetKey: string | null
+  bridgedTvlUsd: number | null
+  bridgedAmount24hUsd: number | null
+  pendingOutUsd: number | null
+  pendingOutCount: number
   alerts: number
 }
 
@@ -88,22 +119,22 @@ const parentChainNames: Record<number, string> = {
   42161: 'Arbitrum One',
 }
 
-const formatStatus = (value: HealthStatus) => value
+const getPortalSnapshotPath = () =>
+  path.resolve(
+    __dirname,
+    '../../monitor-indexer/src/generated/portalMainnet.json'
+  )
 
-const getPortalSnapshotPath = () => path.resolve(__dirname, './portalMainnet.json')
-
-let cachedPortalSnapshot: PortalSnapshot | null = null
-
-const loadPortalSnapshot = (): PortalSnapshot => {
-  if (cachedPortalSnapshot) {
-    return cachedPortalSnapshot
+const normalizeSchemaName = (value: string | undefined) => {
+  const schema = (value || 'public').trim() || 'public'
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schema)) {
+    throw new Error(`Invalid database schema "${value}"`)
   }
 
-  cachedPortalSnapshot = JSON.parse(
-    fs.readFileSync(getPortalSnapshotPath(), 'utf8')
-  ) as PortalSnapshot
-  return cachedPortalSnapshot
+  return schema
 }
+
+const tableName = (schemaName: string, table: string) => `"${schemaName}"."${table}"`
 
 const formatTypeLabel = ({
   latestEventName,
@@ -132,9 +163,9 @@ const getBatchStatus = ({
   nowSeconds: number
   lastBatchAt: number | null
   assertionIntervalSeconds: number | null
-}) => {
+}): HealthStatus => {
   if (!lastBatchAt) {
-    return formatStatus('critical')
+    return 'critical'
   }
 
   const ageSeconds = nowSeconds - lastBatchAt
@@ -143,9 +174,9 @@ const getBatchStatus = ({
     Math.min(assertionIntervalSeconds ?? 3600, 4 * 60 * 60)
   )
 
-  if (ageSeconds > target * 4) return formatStatus('critical')
-  if (ageSeconds > target * 2) return formatStatus('warning')
-  return formatStatus('healthy')
+  if (ageSeconds > target * 4) return 'critical'
+  if (ageSeconds > target * 2) return 'warning'
+  return 'healthy'
 }
 
 const getAssertionStatus = ({
@@ -158,18 +189,18 @@ const getAssertionStatus = ({
   latestCreatedAt: number | null
   latestConfirmedAt: number | null
   assertionIntervalSeconds: number | null
-}) => {
+}): HealthStatus => {
   if (!latestCreatedAt) {
-    return formatStatus('critical')
+    return 'critical'
   }
 
   const target = Math.max(assertionIntervalSeconds ?? 3600, 30 * 60)
   const createdAgeSeconds = nowSeconds - latestCreatedAt
 
-  if (createdAgeSeconds > target * 4) return formatStatus('critical')
-  if (createdAgeSeconds > target * 2) return formatStatus('warning')
-  if (!latestConfirmedAt) return formatStatus('warning')
-  return formatStatus('healthy')
+  if (createdAgeSeconds > target * 4) return 'critical'
+  if (createdAgeSeconds > target * 2) return 'warning'
+  if (!latestConfirmedAt) return 'warning'
+  return 'healthy'
 }
 
 const getRetryableStatus = ({
@@ -180,10 +211,10 @@ const getRetryableStatus = ({
   totalCount: number
   expiringCount: number
   expiredCount: number
-}) => {
-  if (expiredCount > 0) return formatStatus('critical')
-  if (expiringCount > 0 || totalCount > 0) return formatStatus('warning')
-  return formatStatus('healthy')
+}): HealthStatus => {
+  if (expiredCount > 0) return 'critical'
+  if (expiringCount > 0 || totalCount > 0) return 'warning'
+  return 'healthy'
 }
 
 const countAlerts = (...statuses: string[]) =>
@@ -192,27 +223,57 @@ const countAlerts = (...statuses: string[]) =>
 const parseCount = (value: string | number | null | undefined) =>
   value === null || value === undefined ? 0 : Number(value)
 
-const byChainId = <T extends { chain_id: number }>(rows: T[]): Map<number, T> =>
+const toUsd = (valueWei: string | null | undefined, priceUsd: number | null) => {
+  if (!valueWei || priceUsd === null) {
+    return null
+  }
+
+  return (Number(valueWei) / 1e18) * priceUsd
+}
+
+const byChainId = <T extends { chain_id: number }>(rows: T[]) =>
   new Map(rows.map(row => [Number(row.chain_id), row]))
+
+const byAssetKey = <T extends { asset_key: string }>(rows: T[]) =>
+  new Map(rows.map(row => [row.asset_key, row]))
+
+let cachedPortalSnapshot: PortalSnapshot | null = null
+
+const loadPortalSnapshot = () => {
+  if (cachedPortalSnapshot) {
+    return cachedPortalSnapshot
+  }
+
+  cachedPortalSnapshot = JSON.parse(
+    fs.readFileSync(getPortalSnapshotPath(), 'utf8')
+  ) as PortalSnapshot
+  return cachedPortalSnapshot
+}
 
 export class FleetDb {
   private readonly pool: Pool
+
   private readonly batchDeliveriesTable: string
   private readonly assertionEventsTable: string
   private readonly retryableTicketsTable: string
+  private readonly rpcChecksTable: string
+  private readonly balanceSnapshotsTable: string
+  private readonly pricesTable: string
+  private readonly exitsTable: string
 
-  constructor(
-    connectionString: string,
-    schema = process.env.DATABASE_SCHEMA || 'public'
-  ) {
+  constructor(connectionString: string, schemaName = process.env.DATABASE_SCHEMA) {
+    const schema = normalizeSchemaName(schemaName)
     this.pool = new Pool({
       connectionString,
-      max: Number(process.env.MONITOR_API_PG_POOL_MAX || 1),
+      max: Number(process.env.PG_POOL_MAX || 5),
     })
-    const qualifiedSchema = quoteIdentifier(schema)
-    this.batchDeliveriesTable = `${qualifiedSchema}.batch_deliveries`
-    this.assertionEventsTable = `${qualifiedSchema}.assertion_events`
-    this.retryableTicketsTable = `${qualifiedSchema}.retryable_tickets`
+    this.batchDeliveriesTable = tableName(schema, 'batch_deliveries')
+    this.assertionEventsTable = tableName(schema, 'assertion_events')
+    this.retryableTicketsTable = tableName(schema, 'retryable_tickets')
+    this.rpcChecksTable = tableName(schema, 'rpc_checks')
+    this.balanceSnapshotsTable = tableName(schema, 'native_balance_snapshots')
+    this.pricesTable = tableName(schema, 'asset_prices')
+    this.exitsTable = tableName(schema, 'exit_messages')
   }
 
   async healthCheck() {
@@ -220,6 +281,22 @@ export class FleetDb {
     return {
       ok: true,
       snapshotGeneratedAt: loadPortalSnapshot().generatedAt,
+    }
+  }
+
+  private async queryOptional<T = Record<string, unknown>>(
+    text: string,
+    values?: unknown[]
+  ) {
+    try {
+      return await this.pool.query<T>(text, values)
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code === '42P01') {
+        return { rows: [] as T[] }
+      }
+
+      throw error
     }
   }
 
@@ -240,63 +317,147 @@ export class FleetDb {
         0
       ),
       alerts: chains.reduce((sum, chain) => sum + chain.alerts, 0),
+      totalTvlUsd: chains.reduce((sum, chain) => sum + (chain.bridgedTvlUsd || 0), 0),
+      totalPendingOutUsd: chains.reduce(
+        (sum, chain) => sum + (chain.pendingOutUsd || 0),
+        0
+      ),
+      totalBridgedAmount24hUsd: chains.reduce(
+        (sum, chain) => sum + (chain.bridgedAmount24hUsd || 0),
+        0
+      ),
     }
   }
 
   async readFleetChains(): Promise<FleetChain[]> {
     const nowSeconds = Math.floor(Date.now() / 1000)
-    const [batchRows, assertionRows, retryableRows] = await Promise.all([
-      this.pool.query<BatchSummaryRow>(`
-        select distinct on (chain_id)
-          chain_id,
-          parent_block_timestamp,
-          batch_sequence_number,
-          data_location
-        from ${this.batchDeliveriesTable}
-        order by chain_id, parent_block_timestamp desc, log_index desc
-      `),
-      this.pool.query<AssertionSummaryRow>(`
-        with latest as (
+    const [batchRows, assertionRows, retryableRows, rpcRows, balanceRows, priceRows, exitRows] =
+      await Promise.all([
+        this.pool.query<BatchSummaryRow>(`
           select distinct on (chain_id)
             chain_id,
-            event_name
-          from ${this.assertionEventsTable}
+            parent_block_timestamp,
+            batch_sequence_number,
+            data_location
+          from ${this.batchDeliveriesTable}
           order by chain_id, parent_block_timestamp desc, log_index desc
-        )
-        select
-          events.chain_id,
-          max(case when events.kind = 'created' then events.parent_block_timestamp end) as latest_created_at,
-          max(case when events.kind = 'confirmed' then events.parent_block_timestamp end) as latest_confirmed_at,
-          latest.event_name as latest_event_name,
-          count(*) filter (where events.kind = 'created') as created_count,
-          count(*) filter (where events.kind = 'confirmed') as confirmed_count
-        from ${this.assertionEventsTable} events
-        left join latest on latest.chain_id = events.chain_id
-        group by events.chain_id, latest.event_name
-      `),
-      this.pool.query<RetryableSummaryRow>(
-        `
+        `),
+        this.pool.query<AssertionSummaryRow>(`
+          with latest as (
+            select distinct on (chain_id)
+              chain_id,
+              event_name
+            from ${this.assertionEventsTable}
+            order by chain_id, parent_block_timestamp desc, log_index desc
+          )
+          select
+            events.chain_id,
+            max(case when events.kind = 'created' then events.parent_block_timestamp end) as latest_created_at,
+            max(case when events.kind = 'confirmed' then events.parent_block_timestamp end) as latest_confirmed_at,
+            latest.event_name as latest_event_name,
+            count(*) filter (where events.kind = 'created') as created_count,
+            count(*) filter (where events.kind = 'confirmed') as confirmed_count
+          from ${this.assertionEventsTable} events
+          left join latest on latest.chain_id = events.chain_id
+          group by events.chain_id, latest.event_name
+        `),
+        this.pool.query<RetryableSummaryRow>(
+          `
+            select
+              chain_id,
+              count(*) as total_count,
+              count(*) filter (where expires_at > $1 and expires_at - $1 <= 72 * 60 * 60) as expiring_count,
+              count(*) filter (where expires_at <= $1) as expired_count
+            from ${this.retryableTicketsTable}
+            group by chain_id
+          `,
+          [nowSeconds]
+        ),
+        this.queryOptional<RpcSummaryRow>(`
+          with latest_success as (
+            select distinct on (chain_id)
+              chain_id,
+              latency_ms
+            from ${this.rpcChecksTable}
+            where ok = true
+              and latency_ms is not null
+              and checked_at >= now() - interval '8 days'
+            order by chain_id, checked_at desc, id desc
+          )
+          select
+            checks.chain_id,
+            count(*) as total_count,
+            count(*) filter (where checks.ok = true) as ok_count,
+            latest_success.latency_ms,
+            cast(extract(epoch from max(checks.checked_at)) as bigint) as last_checked_at
+          from ${this.rpcChecksTable} checks
+          left join latest_success on latest_success.chain_id = checks.chain_id
+          where checks.checked_at >= now() - interval '8 days'
+          group by checks.chain_id, latest_success.latency_ms
+        `),
+        this.queryOptional<BalanceSummaryRow>(`
+          with latest as (
+            select distinct on (chain_id)
+              chain_id,
+              asset_key,
+              balance_wei
+            from ${this.balanceSnapshotsTable}
+            order by chain_id, checked_at desc, id desc
+          ),
+          previous as (
+            select distinct on (chain_id)
+              chain_id,
+              balance_wei
+            from ${this.balanceSnapshotsTable}
+            where checked_at <= now() - interval '24 hours'
+            order by chain_id, checked_at desc, id desc
+          )
+          select
+            latest.chain_id,
+            latest.asset_key,
+            latest.balance_wei::text,
+            previous.balance_wei::text as previous_balance_wei
+          from latest
+          left join previous on previous.chain_id = latest.chain_id
+        `),
+        this.queryOptional<PriceRow>(`
+          select distinct on (asset_key)
+            asset_key,
+            price_usd::text
+          from ${this.pricesTable}
+          order by asset_key, checked_at desc, id desc
+        `),
+        this.queryOptional<PendingExitSummaryRow>(`
           select
             chain_id,
-            count(*) as total_count,
-            count(*) filter (where expires_at > $1 and expires_at - $1 <= 72 * 60 * 60) as expiring_count,
-            count(*) filter (where expires_at <= $1) as expired_count
-          from ${this.retryableTicketsTable}
+            count(*) as pending_count,
+            coalesce(sum(value_wei), 0)::text as pending_value_wei
+          from ${this.exitsTable}
+          where executed_at is null
           group by chain_id
-        `,
-        [nowSeconds]
-      ),
-    ])
+        `),
+      ])
 
-    const batchByChainId = byChainId<BatchSummaryRow>(batchRows.rows)
-    const assertionByChainId = byChainId<AssertionSummaryRow>(assertionRows.rows)
-    const retryableByChainId = byChainId<RetryableSummaryRow>(retryableRows.rows)
+    const batchByChainId = byChainId(batchRows.rows)
+    const assertionByChainId = byChainId(assertionRows.rows)
+    const retryableByChainId = byChainId(retryableRows.rows)
+    const rpcByChainId = byChainId(rpcRows.rows)
+    const balanceByChainId = byChainId(balanceRows.rows)
+    const exitByChainId = byChainId(exitRows.rows)
+    const priceByAssetKey = byAssetKey(priceRows.rows)
 
     return loadPortalSnapshot().portalMainnetChains
       .map(chain => {
         const batch = batchByChainId.get(chain.chainId)
         const assertion = assertionByChainId.get(chain.chainId)
         const retryable = retryableByChainId.get(chain.chainId)
+        const rpc = rpcByChainId.get(chain.chainId)
+        const balance = balanceByChainId.get(chain.chainId)
+        const exit = exitByChainId.get(chain.chainId)
+        const priceUsd = balance
+          ? Number(priceByAssetKey.get(balance.asset_key)?.price_usd ?? NaN)
+          : NaN
+        const resolvedPriceUsd = Number.isFinite(priceUsd) ? priceUsd : null
 
         const batchStatus = getBatchStatus({
           nowSeconds,
@@ -314,6 +475,14 @@ export class FleetDb {
           expiringCount: parseCount(retryable?.expiring_count),
           expiredCount: parseCount(retryable?.expired_count),
         })
+
+        const rpcChecks8d = parseCount(rpc?.total_count)
+        const okRpcChecks8d = parseCount(rpc?.ok_count)
+        const bridgedTvlUsd = toUsd(balance?.balance_wei, resolvedPriceUsd)
+        const bridgedAmount24hUsd =
+          bridgedTvlUsd === null
+            ? null
+            : bridgedTvlUsd - (toUsd(balance?.previous_balance_wei, resolvedPriceUsd) || 0)
 
         return {
           chainId: chain.chainId,
@@ -342,10 +511,15 @@ export class FleetDb {
           openRetryUrgentCount:
             parseCount(retryable?.expiring_count) + parseCount(retryable?.expired_count),
           expiredRetryableCount: parseCount(retryable?.expired_count),
-          rpcScore: null,
-          latencyMs: null,
-          bridgedTvlUsd: null,
-          pendingOutUsd: null,
+          rpcScore: rpcChecks8d ? (okRpcChecks8d / rpcChecks8d) * 100 : null,
+          rpcChecks8d,
+          lastRpcCheckedAt: rpc?.last_checked_at ?? null,
+          latencyMs: rpc?.latency_ms ?? null,
+          nativeAssetKey: balance?.asset_key ?? null,
+          bridgedTvlUsd,
+          bridgedAmount24hUsd,
+          pendingOutUsd: toUsd(exit?.pending_value_wei, resolvedPriceUsd),
+          pendingOutCount: parseCount(exit?.pending_count),
           alerts: countAlerts(retryableStatus, batchStatus, assertionStatus),
         }
       })
@@ -360,39 +534,69 @@ export class FleetDb {
       return null
     }
 
-    const [chains, batchRows, assertionRows, retryableRows] = await Promise.all([
-      this.readFleetChains(),
-      this.pool.query(
-        `
-          select *
-          from ${this.batchDeliveriesTable}
-          where chain_id = $1
-          order by parent_block_timestamp desc, log_index desc
-          limit 25
-        `,
-        [chainId]
-      ),
-      this.pool.query(
-        `
-          select *
-          from ${this.assertionEventsTable}
-          where chain_id = $1
-          order by parent_block_timestamp desc, log_index desc
-          limit 25
-        `,
-        [chainId]
-      ),
-      this.pool.query(
-        `
-          select *
-          from ${this.retryableTicketsTable}
-          where chain_id = $1
-          order by parent_block_timestamp desc, log_index desc
-          limit 25
-        `,
-        [chainId]
-      ),
-    ])
+    const [chains, batchRows, assertionRows, retryableRows, rpcRows, exitRows] =
+      await Promise.all([
+        this.readFleetChains(),
+        this.pool.query(
+          `
+            select *
+            from ${this.batchDeliveriesTable}
+            where chain_id = $1
+            order by parent_block_timestamp desc, log_index desc
+            limit 25
+          `,
+          [chainId]
+        ),
+        this.pool.query(
+          `
+            select *
+            from ${this.assertionEventsTable}
+            where chain_id = $1
+            order by parent_block_timestamp desc, log_index desc
+            limit 25
+          `,
+          [chainId]
+        ),
+        this.pool.query(
+          `
+            select *
+            from ${this.retryableTicketsTable}
+            where chain_id = $1
+            order by parent_block_timestamp desc, log_index desc
+            limit 25
+          `,
+          [chainId]
+        ),
+        this.queryOptional(
+          `
+            select
+              extract(epoch from checked_at) as checked_at,
+              ok,
+              latency_ms,
+              error_code
+            from ${this.rpcChecksTable}
+            where chain_id = $1
+            order by checked_at desc, id desc
+            limit 25
+          `,
+          [chainId]
+        ),
+        this.queryOptional(
+          `
+            select
+              position::text as position,
+              value_wei::text as value_wei,
+              extract(epoch from started_at) as started_at,
+              started_tx_hash
+            from ${this.exitsTable}
+            where chain_id = $1
+              and executed_at is null
+            order by started_at desc, child_log_index desc
+            limit 25
+          `,
+          [chainId]
+        ),
+      ])
 
     return {
       chain: chains.find((chain: FleetChain) => chain.chainId === chainId) ?? null,
@@ -400,18 +604,12 @@ export class FleetDb {
       recentBatches: batchRows.rows,
       recentAssertions: assertionRows.rows,
       recentRetryables: retryableRows.rows,
+      recentRpcChecks: rpcRows.rows,
+      pendingExits: exitRows.rows,
     }
   }
 
   async close() {
     await this.pool.end()
   }
-}
-
-const quoteIdentifier = (value: string) => {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
-    throw new Error(`Invalid schema name: ${value}`)
-  }
-
-  return `"${value}"`
 }

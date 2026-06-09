@@ -55,11 +55,22 @@ Runtime behavior:
 - `bold` chains register only BoLD assertion event sources
 - `unknown` chains register both families as a fallback so indexing can still start
 
-## Gaps still intentionally left open
+## Read models added beyond Ponder
+
+The fleet app now has a second write path for metrics that do not fit event indexing cleanly:
+
+- `rpc_checks`
+- `native_balance_snapshots`
+- `asset_prices`
+- `exit_messages`
+
+These tables live in the same Postgres schema as the Ponder tables and are pruned to the same 8-day window.
+
+## Current metric behavior
 
 ### RPC uptime
 
-Add a small probe process that pings every chain RPC every 5 to 10 minutes and writes one row per check:
+The metrics worker pings every chain RPC every 5 minutes and writes one row per check:
 
 - `chain_id`
 - `checked_at`
@@ -67,7 +78,7 @@ Add a small probe process that pings every chain RPC every 5 to 10 minutes and w
 - `latency_ms`
 - optional `error_code`
 
-The fleet API can then compute 8-day uptime directly from those rows and expose recent failures without touching the chain.
+The API computes 8-day uptime from those rows and exposes recent failures in the chain detail view.
 
 ### Latency
 
@@ -75,7 +86,7 @@ Use the same probe table above.
 
 - table column stays `latency_ms`
 - fleet row shows the latest successful probe
-- detail view can show the last N probe samples
+- detail view shows the last N probe samples
 
 ### Retryable open count
 
@@ -99,28 +110,30 @@ The missing piece is redeemed state. The clean follow-up is a child-chain read m
 
 Model this as pending L2 to L1 value that has been initiated on the child chain but not yet executed on the parent outbox.
 
-Indexing plan:
+Current implementation:
 
 - child chain: outbound message events from the Arbitrum system precompile path
 - parent chain: outbox execution events
-- read model: pending message set keyed by message identity
+- read model: pending message set keyed by child-chain `position`
 
-The primary UI number should be the native-token value still pending execution.
+The current UI number is native value still pending execution. It does not attempt ERC-20 exit accounting yet.
 
 ### Bridged TVL
 
 Start with native-token balances only.
 
-Indexing plan:
+Current implementation:
 
 - derive canonical bridge contracts from the portal snapshot
-- maintain token-to-balance mappings per chain
-- for phase 1, track only the native token escrow balance that reflects bridged value
-- later add ERC-20 gateway balances and token metadata pricing
+- track the native balance of each parent-chain bridge contract
+- snapshot ETH price separately
+- materialize current TVL plus 24-hour net change from those snapshots
+
+This is intentionally phase 1. It reflects native escrow only, not the full gateway asset set for custom gas token chains.
 
 ## Questions to resolve next
 
 1. Which exact contract balance should define native-token `Bridged TVL` for each chain: bridge escrow, inbox-facing escrow, or a chain-specific canonical balance?
 2. Which child-chain outbound event shape should be the canonical source for `Pending Out` across rollup and AnyTrust chains?
-3. Do we want the RPC probe data in the same Postgres schema as Ponder tables, or in separate app-owned tables in the same database?
+3. How should we extend the native-only TVL model into ERC-20 gateway balances for custom gas token chains?
 4. Should the portal refresh script move parent RPC defaults into env vars before the Supabase-backed deployment pass?

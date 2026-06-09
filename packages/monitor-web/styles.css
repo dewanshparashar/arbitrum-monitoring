@@ -158,6 +158,11 @@ button:hover {
   grid-template-columns: repeat(4, minmax(96px, 1fr));
 }
 
+.detail-grid {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  padding: 22px 24px 0;
+}
+
 .summary-metric,
 .detail-metric {
   background: rgba(255, 255, 255, 0.03);

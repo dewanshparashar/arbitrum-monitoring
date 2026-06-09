@@ -74,9 +74,30 @@ const formatCurrency = (value) => {
   }).format(Number(value))
 }
 
+const formatSignedCurrency = (value) => {
+  if (value === null || value === undefined) return '—'
+  const amount = Number(value)
+  const prefix = amount > 0 ? '+' : ''
+  return `${prefix}${formatCurrency(amount)}`
+}
+
 const formatNumber = (value) => {
   if (value === null || value === undefined) return '—'
   return new Intl.NumberFormat('en-US').format(Number(value))
+}
+
+const formatTokenAmount = (valueWei) => {
+  if (valueWei === null || valueWei === undefined) return '—'
+  const value = Number(valueWei) / 1e18
+  return new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: value >= 100 ? 2 : 4,
+  }).format(value)
+}
+
+const formatAssetLabel = (value) => {
+  if (!value) return 'native'
+  if (value === 'ethereum') return 'ETH'
+  return String(value).toUpperCase()
 }
 
 const formatRpcScore = (value) => {
@@ -188,13 +209,13 @@ const renderOverview = (overview) => {
     <div class="summary-head">
       <div>
         <h2>Fleet register</h2>
-        <p class="summary-note">Parent-chain events are indexed for 8 days. RPC uptime, latency, TVL, and pending out are queued for the next read models.</p>
+        <p class="summary-note">Parent-chain events, RPC probes, native bridge balances, and pending exits are stored in 8-day read models.</p>
         <div class="summary-chip-row">${chips}</div>
       </div>
       <div class="summary-metrics">
         <div class="summary-metric"><span>Chains</span><strong>${formatNumber(overview.chains)}</strong></div>
-        <div class="summary-metric"><span>Pending</span><strong>${formatNumber(overview.retryablesOpen)}</strong></div>
-        <div class="summary-metric"><span>Urgent</span><strong>${formatNumber(overview.retryablesUrgent)}</strong></div>
+        <div class="summary-metric"><span>TVL</span><strong>${formatCurrency(overview.totalTvlUsd)}</strong></div>
+        <div class="summary-metric"><span>Pending Out</span><strong>${formatCurrency(overview.totalPendingOutUsd)}</strong></div>
         <div class="summary-metric"><span>Alerts</span><strong>${formatNumber(overview.alerts)}</strong></div>
       </div>
     </div>
@@ -309,11 +330,41 @@ const renderDetail = (detail) => {
       </div>
     </div>
     <div class="detail-grid">
+      <div class="detail-metric"><span>RPC uptime</span><strong>${detail.chain.rpcScore === null ? '—' : `${detail.chain.rpcScore.toFixed(2)}%`}</strong></div>
+      <div class="detail-metric"><span>Latency</span><strong>${detail.chain.latencyMs === null ? '—' : `${formatNumber(detail.chain.latencyMs)}ms`}</strong></div>
+      <div class="detail-metric"><span>Bridged TVL</span><strong>${formatCurrency(detail.chain.bridgedTvlUsd)}</strong></div>
+      <div class="detail-metric"><span>Bridge 24h</span><strong>${formatSignedCurrency(detail.chain.bridgedAmount24hUsd)}</strong></div>
+      <div class="detail-metric"><span>Pending out</span><strong>${formatCurrency(detail.chain.pendingOutUsd)}</strong></div>
+      <div class="detail-metric"><span>Pending exits</span><strong>${formatNumber(detail.chain.pendingOutCount)}</strong></div>
       <div class="detail-metric"><span>Last batch</span><strong>${formatAgo(detail.chain.lastBatchAt)}</strong></div>
       <div class="detail-metric"><span>Open retry</span><strong>${escapeHtml(formatOpenRetry(detail.chain))}</strong></div>
       <div class="detail-metric"><span>Assertions 8d</span><strong>${formatNumber(detail.chain.createdAssertions8d)}</strong></div>
       <div class="detail-metric"><span>Confirmations 8d</span><strong>${formatNumber(detail.chain.confirmedAssertions8d)}</strong></div>
     </div>
+    ${renderList(
+      'Recent RPC probes',
+      'No probe samples indexed in the current window.',
+      detail.recentRpcChecks,
+      (row) => `
+        <article class="detail-item">
+          <strong>${row.ok ? 'Reachable' : 'Failed'}</strong>
+          <span>${formatAgo(row.checked_at)} ago</span>
+          <small>${row.latency_ms === null ? row.error_code || 'probe failed' : `${formatNumber(row.latency_ms)}ms`}</small>
+        </article>
+      `
+    )}
+    ${renderList(
+      'Pending exits',
+      'No pending native exits in the current window.',
+      detail.pendingExits,
+      (row) => `
+        <article class="detail-item">
+          <strong>Position ${escapeHtml(row.position)}</strong>
+          <span>${formatAgo(row.started_at)} ago</span>
+          <small>${formatTokenAmount(row.value_wei)} ${escapeHtml(formatAssetLabel(detail.chain.nativeAssetKey))}</small>
+        </article>
+      `
+    )}
     ${renderList(
       'Recent batches',
       'No indexed batch deliveries in the current window.',
