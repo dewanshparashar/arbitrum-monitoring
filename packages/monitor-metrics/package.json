@@ -14,7 +14,7 @@
   },
   "scripts": {
     "build": "rm -rf ./dist && tsc",
-    "dev": "yarn build && node ./dist/main.js",
-    "start": "node ./dist/main.js"
+    "dev": "yarn build && node ./dist/monitor-metrics/main.js",
+    "start": "node ./dist/monitor-metrics/main.js"
   }
 }
