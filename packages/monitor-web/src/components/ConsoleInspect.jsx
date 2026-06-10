@@ -216,6 +216,14 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                   : `This chain's native gas token (ETH), locked in the canonical bridge and priced for TVL.`}>
                   bridge <span style={{ color: C.flag }}>{c.bridge.balanceAsset || c.native}</span>
                 </Tip>
+                {c.arbos && c.arbos.version != null ? (
+                  <>
+                    {' · '}
+                    <Tip underline w={300} label={<>ArbOS version read on-chain from this chain's own RPC via <span style={{ fontFamily: 'var(--mono)' }}>ArbSys.arbOSVersion()</span> (precompile 0x…64). Raw value <b style={{ color: '#fff' }}>{c.arbos.raw}</b> − 55 offset = ArbOS {c.arbos.version}.{c.arbos.checkedAt ? ' Read ' + relative(c.arbos.checkedAt) + '.' : ''}</>}>
+                      <span style={{ color: C.kw }}>ArbOS {c.arbos.version}{c.arbos.name ? ' (' + c.arbos.name + ')' : ''}</span>
+                    </Tip>
+                  </>
+                ) : null}
               </div>
             </div>
           </div>

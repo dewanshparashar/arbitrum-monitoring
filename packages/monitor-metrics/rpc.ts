@@ -18,6 +18,10 @@ const erc20Interface = new ethers.utils.Interface([
   'function decimals() view returns (uint8)',
 ])
 
+const arbSysInterface = new ethers.utils.Interface([
+  'function arbOSVersion() view returns (uint64)',
+])
+
 const l2ToL1Interface = new ethers.utils.Interface([
   'event L2ToL1Tx(address caller, address indexed destination, uint256 indexed hash, uint256 indexed position, uint256 arbBlockNum, uint256 ethBlockNum, uint256 timestamp, uint256 callvalue, bytes data)',
 ])
@@ -163,6 +167,20 @@ export const getErc20Balance = async (
     retries: 2,
   })
   return BigInt(erc20Interface.decodeFunctionResult('balanceOf', result)[0].toString())
+}
+
+// Reads ArbOS version from the ArbSys precompile on the CHILD chain's own RPC.
+// NOTE: arbOSVersion() returns 55 + the actual ArbOS version (a documented
+// quirk), so callers subtract 55. See docs.arbitrum.io precompiles reference.
+export const getArbOsVersionRaw = async (rpcUrl: string) => {
+  const data = arbSysInterface.encodeFunctionData('arbOSVersion')
+  const result = await rpcCall<string>(
+    rpcUrl,
+    'eth_call',
+    [{ to: arbSysAddress, data }, 'latest'],
+    { retries: 1 }
+  )
+  return Number(arbSysInterface.decodeFunctionResult('arbOSVersion', result)[0])
 }
 
 export const getErc20Decimals = async (rpcUrl: string, token: string) => {

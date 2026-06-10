@@ -6,6 +6,7 @@ import {
   decodeL2ToL1Log,
   decodeOutboxLog,
   findBlockByTimestamp,
+  getArbOsVersionRaw,
   getBalance,
   getBlockNumber,
   getErc20Balance,
@@ -62,6 +63,7 @@ class MetricsDb {
   private readonly balanceSnapshotsTable: string
   private readonly pricesTable: string
   private readonly exitsTable: string
+  private readonly chainRuntimeTable: string
 
   constructor(connectionString: string, schemaName: string) {
     this.pool = new Pool({
@@ -74,6 +76,7 @@ class MetricsDb {
     this.balanceSnapshotsTable = tableName(this.schemaName, 'native_balance_snapshots')
     this.pricesTable = tableName(this.schemaName, 'asset_prices')
     this.exitsTable = tableName(this.schemaName, 'exit_messages')
+    this.chainRuntimeTable = tableName(this.schemaName, 'chain_runtime')
   }
 
   async init() {
@@ -133,6 +136,21 @@ class MetricsDb {
         executed_tx_hash text
       )
     `)
+    // current per-chain runtime metadata read on-chain (ArbOS version, active
+    // batch poster). One row per chain, upserted each cycle.
+    await this.pool.query(`
+      create table if not exists ${this.chainRuntimeTable} (
+        chain_id bigint primary key,
+        arbos_raw integer,
+        arbos_version integer,
+        arbos_name text,
+        batch_poster text,
+        checked_at timestamptz not null
+      )
+    `)
+    await this.pool.query(
+      `alter table ${this.chainRuntimeTable} add column if not exists batch_poster text`
+    )
   }
 
   async getState(key: string) {
@@ -205,6 +223,29 @@ class MetricsDb {
         values ($1, $2, $3)
       `,
       [row.assetKey, row.priceUsd, row.checkedAt]
+    )
+  }
+
+  // Upserts the ArbOS columns; leaves batch_poster untouched (set separately).
+  async upsertChainArbos(row: {
+    chainId: number
+    arbosRaw: number | null
+    arbosVersion: number | null
+    arbosName: string | null
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.chainRuntimeTable}
+          (chain_id, arbos_raw, arbos_version, arbos_name, checked_at)
+        values ($1, $2, $3, $4, $5)
+        on conflict (chain_id) do update
+        set arbos_raw = excluded.arbos_raw,
+            arbos_version = excluded.arbos_version,
+            arbos_name = excluded.arbos_name,
+            checked_at = excluded.checked_at
+      `,
+      [row.chainId, row.arbosRaw, row.arbosVersion, row.arbosName, row.checkedAt]
     )
   }
 
@@ -574,6 +615,57 @@ const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
   }
 }
 
+// arbOSVersion() returns 55 + the actual ArbOS version (documented quirk), so
+// subtract the offset. Names: exact known releases, else family-by-decade
+// (20s Atlas, 30s Bianca, 40s Callisto, 50s Dia, 60s Elara — see
+// docs.arbitrum.io/run-arbitrum-node/arbos-releases/overview).
+const ARBOS_VERSION_OFFSET = 55
+const ARBOS_RELEASE_NAMES: Record<number, string> = {
+  20: 'Atlas',
+  32: 'Bianca',
+  40: 'Callisto',
+  51: 'Dia',
+  60: 'Elara',
+}
+const ARBOS_FAMILY_BY_DECADE: Record<number, string> = {
+  2: 'Atlas',
+  3: 'Bianca',
+  4: 'Callisto',
+  5: 'Dia',
+  6: 'Elara',
+}
+
+const arbosNameFor = (version: number): string | null => {
+  if (ARBOS_RELEASE_NAMES[version]) return ARBOS_RELEASE_NAMES[version]
+  return ARBOS_FAMILY_BY_DECADE[Math.floor(version / 10)] ?? null
+}
+
+const syncChainRuntime = async (db: MetricsDb) => {
+  const checkedAt = new Date().toISOString()
+
+  await Promise.all(
+    getMainnetChains().map(async chain => {
+      // per-chain isolation: child RPCs are public/flaky and some reject the call
+      try {
+        const raw = await getArbOsVersionRaw(chain.rpcUrl)
+        if (!Number.isFinite(raw)) {
+          return
+        }
+        const version = raw > ARBOS_VERSION_OFFSET ? raw - ARBOS_VERSION_OFFSET : raw
+        await db.upsertChainArbos({
+          chainId: chain.chainId,
+          arbosRaw: raw,
+          arbosVersion: version,
+          arbosName: arbosNameFor(version),
+          checkedAt,
+        })
+      } catch (error) {
+        console.error(`arbos read failed for ${chain.slug}`, error)
+      }
+    })
+  )
+}
+
 // Each stage is isolated so a failure in one (e.g. price API down) never
 // blocks the others (RPC probes, balances, exit indexing) from updating.
 // Failed stage names are collected so the heartbeat can report partial failure.
@@ -591,6 +683,7 @@ const runCycle = async (db: MetricsDb, chunkSize: number) => {
   await stage('rpc checks', () => syncRpcChecks(db))
   await stage('balance sync', () => syncBalances(db))
   await stage('price sync', () => syncEthereumPrice(db))
+  await stage('chain runtime', () => syncChainRuntime(db))
   await stage('exit sync', () => syncExitMessages(db, chunkSize))
   await stage('prune', () => db.prune())
 

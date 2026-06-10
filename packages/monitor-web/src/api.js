@@ -118,6 +118,13 @@ export const toViewChain = c => {
     bold,
     native: assetLabel(c.nativeAssetKey),
     nativeAssetKey: c.nativeAssetKey,
+    arbos: {
+      version: c.arbosVersion ?? null,
+      name: c.arbosName ?? null,
+      raw: c.arbosRaw ?? null,
+      checkedAt: c.runtimeCheckedAt ?? null,
+    },
+    batchPoster: c.batchPoster ?? null,
     health: overallHealth(c.health),
     monRaw: c.health, // { retryable, batch, assertion } raw API statuses
     mon, // mapped ok/warn/crit/idle

@@ -66,6 +66,15 @@ type RpcSummaryRow = {
   last_checked_at: number | null
 }
 
+type ChainRuntimeRow = {
+  chain_id: number
+  arbos_raw: number | null
+  arbos_version: number | null
+  arbos_name: string | null
+  batch_poster: string | null
+  checked_at: number | null
+}
+
 type BalanceSummaryRow = {
   chain_id: number
   asset_key: string
@@ -128,6 +137,11 @@ type FleetChain = {
   bridgedAmount24hUsd: number | null
   pendingOutUsd: number | null
   pendingOutCount: number
+  arbosVersion: number | null
+  arbosName: string | null
+  arbosRaw: number | null
+  batchPoster: string | null
+  runtimeCheckedAt: number | null
   alerts: number
 }
 
@@ -299,6 +313,7 @@ export class FleetDb {
   private readonly pricesTable: string
   private readonly exitsTable: string
   private readonly workerStateTable: string
+  private readonly chainRuntimeTable: string
 
   constructor(connectionString: string, schemaName = process.env.DATABASE_SCHEMA) {
     const schema = normalizeSchemaName(schemaName)
@@ -314,6 +329,7 @@ export class FleetDb {
     this.pricesTable = tableName(schema, 'asset_prices')
     this.exitsTable = tableName(schema, 'exit_messages')
     this.workerStateTable = tableName(schema, 'metric_worker_state')
+    this.chainRuntimeTable = tableName(schema, 'chain_runtime')
   }
 
   async healthCheck() {
@@ -380,7 +396,7 @@ export class FleetDb {
 
   async readFleetChains(): Promise<FleetChain[]> {
     const nowSeconds = Math.floor(Date.now() / 1000)
-    const [batchRows, assertionRows, retryableRows, rpcRows, balanceRows, priceRows, exitRows] =
+    const [batchRows, assertionRows, retryableRows, rpcRows, balanceRows, priceRows, exitRows, runtimeRows] =
       await Promise.all([
         this.pool.query<BatchSummaryRow>(`
           select distinct on (chain_id)
@@ -492,6 +508,16 @@ export class FleetDb {
           where executed_at is null
           group by chain_id
         `),
+        this.queryOptional<ChainRuntimeRow>(`
+          select
+            chain_id,
+            arbos_raw,
+            arbos_version,
+            arbos_name,
+            batch_poster,
+            cast(extract(epoch from checked_at) as bigint) as checked_at
+          from ${this.chainRuntimeTable}
+        `),
       ])
 
     const batchByChainId = byChainId(batchRows.rows)
@@ -500,6 +526,7 @@ export class FleetDb {
     const rpcByChainId = byChainId(rpcRows.rows)
     const balanceByChainId = byChainId(balanceRows.rows)
     const exitByChainId = byChainId(exitRows.rows)
+    const runtimeByChainId = byChainId(runtimeRows.rows)
     const priceByAssetKey = byAssetKey(priceRows.rows)
 
     return loadPortalSnapshot().portalMainnetChains
@@ -510,6 +537,7 @@ export class FleetDb {
         const rpc = rpcByChainId.get(chain.chainId)
         const balance = balanceByChainId.get(chain.chainId)
         const exit = exitByChainId.get(chain.chainId)
+        const runtime = runtimeByChainId.get(chain.chainId)
         const priceRow = balance ? priceByAssetKey.get(balance.asset_key) : undefined
         const priceUsd = priceRow ? Number(priceRow.price_usd) : NaN
         const resolvedPriceUsd = Number.isFinite(priceUsd) ? priceUsd : null
@@ -586,6 +614,11 @@ export class FleetDb {
           bridgedAmount24hUsd,
           pendingOutUsd: toUsd(exit?.pending_value_wei, resolvedPriceUsd),
           pendingOutCount: parseCount(exit?.pending_count),
+          arbosVersion: runtime?.arbos_version ?? null,
+          arbosName: runtime?.arbos_name ?? null,
+          arbosRaw: runtime?.arbos_raw ?? null,
+          batchPoster: runtime?.batch_poster ?? null,
+          runtimeCheckedAt: runtime?.checked_at ?? null,
           alerts: countAlerts(retryableStatus, batchStatus, assertionStatus),
         }
       })
