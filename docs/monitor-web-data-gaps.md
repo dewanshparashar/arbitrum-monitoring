@@ -100,11 +100,18 @@ Practical substitutions already made (no backend change needed):
 
 A pass over the worker (`monitor-metrics`) and the API's derivations:
 
-- **TVL is bridge ETH, not gas-token TVL.** `asset_key` is hardcoded
-  `'ethereum'` and only ETH is priced (CoinGecko), so TVL = ETH locked in the
-  canonical bridge × ETH/USD. The UI now labels this "bridge ETH" and exposes
-  the full derivation (balance @ block × price, with timestamps). Per-token /
-  custom-gas-token TVL remains a gap (see bridge.flow above).
+- **TVL is now measured in the chain's actual bridged asset (Part A).** For
+  ETH-native chains the canonical bridge balance is ETH (priced via CoinGecko).
+  For the 19 custom-gas-token chains the bridge locks an ERC-20 (the native
+  token), so the worker reads `nativeToken.balanceOf(bridge)` + `decimals()` at
+  the snapshot block and stores it under the token's `asset_key`/`decimals`
+  instead of mis-reading ETH. The API is decimals-aware (`toUsd(wei, price,
+  decimals)`) and the UI shows the native amount + symbol, with **USD only
+  where a price feed exists for that token** — otherwise an honest `n/a` USD
+  with the native amount shown. **Part B (per-token USD pricing) is the
+  remaining gap:** there's no universal oracle for arbitrary gas tokens, so
+  custom-gas-token TVL is currently native-denominated only. Fleet-wide
+  `totalTvlUsd` therefore reflects priced (ETH) chains only.
 - **Balance ↔ block consistency.** Balances are now read *at the recorded block*
   (`eth_getBalance(addr, <block>)`) instead of `'latest'`, so `balance_wei` and
   `block_number` always refer to the same block (the head could advance between

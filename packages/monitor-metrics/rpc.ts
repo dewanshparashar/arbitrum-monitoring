@@ -13,6 +13,11 @@ const activeOutboxInterface = new ethers.utils.Interface([
   'function activeOutbox() view returns (address)',
 ])
 
+const erc20Interface = new ethers.utils.Interface([
+  'function balanceOf(address owner) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+])
+
 const l2ToL1Interface = new ethers.utils.Interface([
   'event L2ToL1Tx(address caller, address indexed destination, uint256 indexed hash, uint256 indexed position, uint256 arbBlockNum, uint256 ethBlockNum, uint256 timestamp, uint256 callvalue, bytes data)',
 ])
@@ -141,6 +146,31 @@ export const getBalance = async (
     retries: 2,
   })
   return BigInt(value)
+}
+
+// ERC-20 balance of `holder`, read at an explicit block for consistency with
+// the recorded block_number (defaults to 'latest'). Used for custom-gas-token
+// chains where the canonical bridge locks an ERC-20, not ETH.
+export const getErc20Balance = async (
+  rpcUrl: string,
+  token: string,
+  holder: string,
+  blockNumber?: bigint
+) => {
+  const blockTag = blockNumber === undefined ? 'latest' : toHexBlock(blockNumber)
+  const data = erc20Interface.encodeFunctionData('balanceOf', [holder])
+  const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: token, data }, blockTag], {
+    retries: 2,
+  })
+  return BigInt(erc20Interface.decodeFunctionResult('balanceOf', result)[0].toString())
+}
+
+export const getErc20Decimals = async (rpcUrl: string, token: string) => {
+  const data = erc20Interface.encodeFunctionData('decimals')
+  const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: token, data }, 'latest'], {
+    retries: 2,
+  })
+  return Number(erc20Interface.decodeFunctionResult('decimals', result)[0])
 }
 
 export const readActiveOutbox = async (rpcUrl: string, bridge: string) => {

@@ -71,6 +71,7 @@ type BalanceSummaryRow = {
   asset_key: string
   balance_wei: string
   previous_balance_wei: string | null
+  decimals: number | null
   block_number: string | null
   checked_at: number | null
 }
@@ -115,6 +116,8 @@ type FleetChain = {
   latencyMs: number | null
   nativeAssetKey: string | null
   nativeBalanceWei: string | null
+  nativeAssetDecimals: number
+  nativeAmount: number | null
   balanceBlockNumber: string | null
   balanceCheckedAt: number | null
   priceUsd: number | null
@@ -240,12 +243,30 @@ const countAlerts = (...statuses: string[]) =>
 const parseCount = (value: string | number | null | undefined) =>
   value === null || value === undefined ? 0 : Number(value)
 
-const toUsd = (valueWei: string | null | undefined, priceUsd: number | null) => {
+// decimals defaults to 18: ETH and L2 native callvalue are 18-decimal. Custom
+// gas tokens (parent-chain ERC-20s) can differ, so the bridge-balance call
+// passes the token's actual decimals.
+const toUsd = (
+  valueWei: string | null | undefined,
+  priceUsd: number | null,
+  decimals = 18
+) => {
   if (!valueWei || priceUsd === null) {
     return null
   }
 
-  return (Number(valueWei) / 1e18) * priceUsd
+  return (Number(valueWei) / 10 ** decimals) * priceUsd
+}
+
+// Human-readable native amount (token units), independent of any USD price.
+const toNativeAmount = (
+  valueWei: string | null | undefined,
+  decimals = 18
+) => {
+  if (!valueWei) {
+    return null
+  }
+  return Number(valueWei) / 10 ** decimals
 }
 
 const byChainId = <T extends { chain_id: number }>(rows: T[]) =>
@@ -429,6 +450,7 @@ export class FleetDb {
               chain_id,
               asset_key,
               balance_wei,
+              decimals,
               block_number,
               checked_at
             from ${this.balanceSnapshotsTable}
@@ -446,6 +468,7 @@ export class FleetDb {
             latest.chain_id,
             latest.asset_key,
             latest.balance_wei::text,
+            latest.decimals,
             latest.block_number::text as block_number,
             cast(extract(epoch from latest.checked_at) as bigint) as checked_at,
             previous.balance_wei::text as previous_balance_wei
@@ -510,11 +533,13 @@ export class FleetDb {
 
         const rpcChecks8d = parseCount(rpc?.total_count)
         const okRpcChecks8d = parseCount(rpc?.ok_count)
-        const bridgedTvlUsd = toUsd(balance?.balance_wei, resolvedPriceUsd)
+        const balanceDecimals = balance?.decimals ?? 18
+        const bridgedTvlUsd = toUsd(balance?.balance_wei, resolvedPriceUsd, balanceDecimals)
         const bridgedAmount24hUsd =
           bridgedTvlUsd === null
             ? null
-            : bridgedTvlUsd - (toUsd(balance?.previous_balance_wei, resolvedPriceUsd) || 0)
+            : bridgedTvlUsd -
+              (toUsd(balance?.previous_balance_wei, resolvedPriceUsd, balanceDecimals) || 0)
 
         return {
           chainId: chain.chainId,
@@ -549,6 +574,8 @@ export class FleetDb {
           latencyMs: rpc?.latency_ms ?? null,
           nativeAssetKey: balance?.asset_key ?? null,
           nativeBalanceWei: balance?.balance_wei ?? null,
+          nativeAssetDecimals: balanceDecimals,
+          nativeAmount: toNativeAmount(balance?.balance_wei, balanceDecimals),
           balanceBlockNumber: balance?.block_number ?? null,
           balanceCheckedAt: balance?.checked_at ?? null,
           priceUsd: resolvedPriceUsd,

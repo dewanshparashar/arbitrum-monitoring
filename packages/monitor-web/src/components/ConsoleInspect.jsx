@@ -29,20 +29,36 @@ const slug = c => c.id
 
 // full derivation of the bridged-TVL dollar figure, for a tooltip
 const TvlDerivation = ({ b }) => {
-  if (b.tvlUsd == null) {
-    return <span>No native-balance snapshot or price available for this chain yet.</span>
-  }
   const mono = { fontFamily: 'var(--mono)', color: 'var(--text)' }
+  const asset = b.balanceAsset || 'ETH'
+  // We always know the bridged native amount; USD needs a price for that asset.
+  if (b.tvlUsd == null) {
+    return (
+      <span>
+        <b style={{ color: '#fff' }}>Bridged value (native units)</b>
+        <br />
+        <br />
+        balance: <span style={mono}>{b.balanceNative != null ? F.eth(b.balanceNative, asset) : '—'}</span>
+        {b.balanceBlockNumber ? ` @ block ${b.balanceBlockNumber}` : ''}
+        {b.balanceCheckedAt ? <><br /><span style={{ color: 'var(--text-3)' }}>snapshot {full(b.balanceCheckedAt)}</span></> : null}
+        <br />
+        <br />
+        {b.balanceNative == null
+          ? 'No bridge-balance snapshot for this chain yet.'
+          : <>No USD price feed for <b style={{ color: '#fff' }}>{asset}</b>, so USD TVL is n/a. The native amount above is the real bridged value (the gas token locked in the bridge).</>}
+      </span>
+    )
+  }
   return (
     <span>
       <b style={{ color: '#fff' }}>Bridged TVL = bridge balance × price</b>
       <br />
       <br />
-      balance: <span style={mono}>{F.eth(b.balanceEth, b.balanceAsset || 'ETH')}</span>
+      balance: <span style={mono}>{F.eth(b.balanceNative, asset)}</span>
       {b.balanceBlockNumber ? ` @ block ${b.balanceBlockNumber}` : ''}
       {b.balanceCheckedAt ? <><br /><span style={{ color: 'var(--text-3)' }}>snapshot {full(b.balanceCheckedAt)}</span></> : null}
       <br />
-      price: <span style={mono}>{F.price(b.priceUsd)} / {b.balanceAsset || 'ETH'}</span>
+      price: <span style={mono}>{F.price(b.priceUsd)} / {asset}</span>
       {b.priceSource ? ` (${b.priceSource})` : ''}
       {b.priceCheckedAt ? <><br /><span style={{ color: 'var(--text-3)' }}>priced {full(b.priceCheckedAt)}</span></> : null}
       <br />
@@ -195,7 +211,9 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
               <div style={{ color: C.com, fontSize: 12, marginTop: 3 }}>
                 chainId <span style={{ color: C.num }}>{c.chainId}</span> · parent <span style={{ color: C.fn }}>{c.parent}</span> ·{' '}
                 <span style={{ color: C.kw }}>{c.transport.toLowerCase()}{c.bold ? '+bold' : ''}</span> ·{' '}
-                <Tip underline w={260} label="The asset whose bridge balance is priced for TVL (ETH). The chain's own gas token may differ — gas-token symbol isn't indexed.">
+                <Tip underline w={280} label={c.bridge.isCustomGasToken
+                  ? `This chain's native gas token — the asset locked in the canonical bridge and measured for bridged value. USD priced only where a feed exists.`
+                  : `This chain's native gas token (ETH), locked in the canonical bridge and priced for TVL.`}>
                   bridge <span style={{ color: C.flag }}>{c.bridge.balanceAsset || c.native}</span>
                 </Tip>
               </div>
@@ -231,16 +249,25 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                       Bridged TVL
                     </Tip>
                   }
-                  value={c.bridge.tvlUsd != null ? F.money(c.bridge.tvlUsd) : <Gap what="no native balance snapshot / price for this chain" />}
+                  value={
+                    c.bridge.tvlUsd != null
+                      ? F.money(c.bridge.tvlUsd)
+                      : c.bridge.balanceNative != null
+                        ? F.eth(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH')
+                        : <Gap what="no bridge-balance snapshot for this chain" />
+                  }
                   color={C.num}
+                  sub={c.bridge.tvlUsd == null && c.bridge.balanceNative != null ? 'native units · no USD price' : null}
                 />
                 <Metric
                   label={
-                    <Tip underline w={290} label={`ETH locked in this chain's canonical bridge contract on ${c.parent}. NOTE: this is bridge ETH, not the chain's gas-token TVL — per-token balances aren't indexed.`}>
+                    <Tip underline w={300} label={c.bridge.isCustomGasToken
+                      ? `${c.bridge.balanceAsset} (this chain's custom gas token, an ERC-20) locked in the canonical bridge on ${c.parent}. This IS the bridged value — read via balanceOf at the snapshot block.`
+                      : `ETH locked in this chain's canonical bridge contract on ${c.parent}. ETH is this chain's native gas token, so this is the bridged value.`}>
                       Bridge balance
                     </Tip>
                   }
-                  value={c.bridge.balanceEth != null ? F.eth(c.bridge.balanceEth, c.bridge.balanceAsset || 'ETH') : <Gap what="no balance snapshot" />}
+                  value={c.bridge.balanceNative != null ? F.eth(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH') : <Gap what="no balance snapshot" />}
                   color={C.txt}
                   sub={c.bridge.balanceBlockNumber ? '@ block ' + c.bridge.balanceBlockNumber : null}
                 />
@@ -262,13 +289,12 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 />
               </div>
               <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--hairline)', color: C.com, fontSize: 11 }}>
-                TVL ={' '}
-                <span style={{ color: C.txt }}>{c.bridge.balanceEth != null ? F.eth(c.bridge.balanceEth, c.bridge.balanceAsset || 'ETH') : '—'}</span>
-                {' × '}
-                <span style={{ color: C.txt }}>{c.bridge.priceUsd != null ? F.price(c.bridge.priceUsd) : '—'}</span>
+                {c.bridge.tvlUsd != null ? 'TVL = ' : 'bridged = '}
+                <span style={{ color: C.txt }}>{c.bridge.balanceNative != null ? F.eth(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH') : '—'}</span>
+                {c.bridge.tvlUsd != null ? <>{' × '}<span style={{ color: C.txt }}>{F.price(c.bridge.priceUsd)}</span></> : null}
                 {' · '}
                 {c.gasToken ? (
-                  <Tip w={300} label={<>This chain's native gas token is the ERC-20 <b style={{ color: '#fff' }}>{c.gasToken.symbol || c.gasToken.address}</b>{c.gasToken.name ? ' (' + c.gasToken.name + ')' : ''} locked in the bridge on {c.parent}. Bridged value is currently measured as ETH only; native-token TVL is being wired up.</>}>
+                  <Tip w={320} label={<>This chain's native gas token is the ERC-20 <b style={{ color: '#fff' }}>{c.gasToken.symbol || c.gasToken.address}</b>{c.gasToken.name ? ' (' + c.gasToken.name + ')' : ''} locked in the bridge on {c.parent}. Bridged value is measured in this token (via balanceOf); USD shown only when a price feed exists for it.</>}>
                     <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)', color: C.flag }}>
                       gas token: {c.gasToken.symbol || (c.gasToken.address.slice(0, 8) + '…')}
                     </span>

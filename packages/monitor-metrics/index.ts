@@ -8,6 +8,8 @@ import {
   findBlockByTimestamp,
   getBalance,
   getBlockNumber,
+  getErc20Balance,
+  getErc20Decimals,
   getLogs,
   l2ToL1Topic,
   outboxExecutedTopic,
@@ -100,9 +102,14 @@ class MetricsDb {
         asset_key text not null,
         block_number numeric(78, 0) not null,
         balance_wei numeric(78, 0) not null,
+        decimals integer not null default 18,
         checked_at timestamptz not null
       )
     `)
+    // backfill the decimals column for tables created before it existed
+    await this.pool.query(
+      `alter table ${this.balanceSnapshotsTable} add column if not exists decimals integer not null default 18`
+    )
     await this.pool.query(`
       create table if not exists ${this.pricesTable} (
         id bigserial primary key,
@@ -171,15 +178,23 @@ class MetricsDb {
     assetKey: string
     blockNumber: string
     balanceWei: string
+    decimals: number
     checkedAt: string
   }) {
     await this.pool.query(
       `
         insert into ${this.balanceSnapshotsTable}
-          (chain_id, asset_key, block_number, balance_wei, checked_at)
-        values ($1, $2, $3, $4, $5)
+          (chain_id, asset_key, block_number, balance_wei, decimals, checked_at)
+        values ($1, $2, $3, $4, $5, $6)
       `,
-      [row.chainId, row.assetKey, row.blockNumber, row.balanceWei, row.checkedAt]
+      [
+        row.chainId,
+        row.assetKey,
+        row.blockNumber,
+        row.balanceWei,
+        row.decimals,
+        row.checkedAt,
+      ]
     )
   }
 
@@ -330,6 +345,9 @@ const syncRpcChecks = async (db: MetricsDb) => {
   )
 }
 
+const isCustomGasToken = (token: string | undefined): token is string =>
+  typeof token === 'string' && token.toLowerCase() !== zeroAddress
+
 const syncBalances = async (db: MetricsDb) => {
   const checkedAt = new Date().toISOString()
   const parentRpcUrls = getParentRpcUrls()
@@ -350,18 +368,37 @@ const syncBalances = async (db: MetricsDb) => {
           parentBlocks.set(chain.parentChainId, blockNumber)
         }
 
+        const bridge = chain.ethBridge.bridge as `0x${string}`
+
+        // Custom-gas-token chains lock an ERC-20 (the native token) in the
+        // bridge, not ETH — so we must read THAT token's balance + decimals to
+        // measure the real bridged value. ETH-native chains read ETH directly.
+        if (isCustomGasToken(chain.nativeToken)) {
+          const token = chain.nativeToken as `0x${string}`
+          const [balanceWei, decimals] = await Promise.all([
+            getErc20Balance(parentRpcUrl, token, bridge, blockNumber),
+            getErc20Decimals(parentRpcUrl, token),
+          ])
+          await db.insertBalanceSnapshot({
+            chainId: chain.chainId,
+            assetKey: chain.nativeTokenSymbol || token.toLowerCase(),
+            blockNumber: blockNumber.toString(),
+            balanceWei: balanceWei.toString(),
+            decimals,
+            checkedAt,
+          })
+          return
+        }
+
         // read the balance AT the recorded block so balance_wei and
         // block_number are consistent (head can advance between calls)
-        const balanceWei = await getBalance(
-          parentRpcUrl,
-          chain.ethBridge.bridge as `0x${string}`,
-          blockNumber
-        )
+        const balanceWei = await getBalance(parentRpcUrl, bridge, blockNumber)
         await db.insertBalanceSnapshot({
           chainId: chain.chainId,
           assetKey: 'ethereum',
           blockNumber: blockNumber.toString(),
           balanceWei: balanceWei.toString(),
+          decimals: 18,
           checkedAt,
         })
       } catch (error) {

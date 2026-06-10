@@ -137,8 +137,12 @@ export const toViewChain = c => {
       pendingCount: c.pendingOutCount || 0,
       // provenance — how the $ value is derived
       balanceWei: c.nativeBalanceWei || null,
-      balanceEth: c.nativeBalanceWei != null ? Number(c.nativeBalanceWei) / 1e18 : null,
+      // decimals-correct native amount of the asset locked in the bridge
+      // (ETH, or the chain's custom gas token) — computed server-side
+      balanceNative: c.nativeAmount ?? null,
+      balanceDecimals: c.nativeAssetDecimals ?? 18,
       balanceAsset: c.priceAsset ? assetLabel(c.priceAsset) : assetLabel(c.nativeAssetKey),
+      isCustomGasToken: !!c.nativeAssetKey && c.nativeAssetKey !== 'ethereum',
       balanceBlockNumber: c.balanceBlockNumber || null,
       balanceCheckedAt: c.balanceCheckedAt || null,
       priceUsd: c.priceUsd ?? null,
