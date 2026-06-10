@@ -172,6 +172,18 @@ export const getErc20Balance = async (
 // Reads ArbOS version from the ArbSys precompile on the CHILD chain's own RPC.
 // NOTE: arbOSVersion() returns 55 + the actual ArbOS version (a documented
 // quirk), so callers subtract 55. See docs.arbitrum.io precompiles reference.
+// The active batch poster is the EOA that sent the batch transaction — read
+// the `from` of a recent batch tx on the parent chain.
+export const getTransactionSender = async (rpcUrl: string, txHash: string) => {
+  const tx = await rpcCall<{ from?: string } | null>(
+    rpcUrl,
+    'eth_getTransactionByHash',
+    [txHash],
+    { retries: 1 }
+  )
+  return tx?.from ? tx.from.toLowerCase() : null
+}
+
 export const getArbOsVersionRaw = async (rpcUrl: string) => {
   const data = arbSysInterface.encodeFunctionData('arbOSVersion')
   const result = await rpcCall<string>(

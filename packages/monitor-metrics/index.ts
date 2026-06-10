@@ -12,6 +12,7 @@ import {
   getErc20Balance,
   getErc20Decimals,
   getLogs,
+  getTransactionSender,
   l2ToL1Topic,
   outboxExecutedTopic,
   probeRpc,
@@ -64,6 +65,7 @@ class MetricsDb {
   private readonly pricesTable: string
   private readonly exitsTable: string
   private readonly chainRuntimeTable: string
+  private readonly batchDeliveriesTable: string
 
   constructor(connectionString: string, schemaName: string) {
     this.pool = new Pool({
@@ -77,6 +79,8 @@ class MetricsDb {
     this.pricesTable = tableName(this.schemaName, 'asset_prices')
     this.exitsTable = tableName(this.schemaName, 'exit_messages')
     this.chainRuntimeTable = tableName(this.schemaName, 'chain_runtime')
+    // indexer-owned table, read-only here, to find recent batch tx hashes
+    this.batchDeliveriesTable = tableName(this.schemaName, 'batch_deliveries')
   }
 
   async init() {
@@ -246,6 +250,47 @@ class MetricsDb {
             checked_at = excluded.checked_at
       `,
       [row.chainId, row.arbosRaw, row.arbosVersion, row.arbosName, row.checkedAt]
+    )
+  }
+
+  // Most recent indexed batch transaction hash for a chain (parent-chain tx).
+  async getLatestBatchTxHash(chainId: number) {
+    try {
+      const result = await this.pool.query<{ transaction_hash: string }>(
+        `
+          select transaction_hash
+          from ${this.batchDeliveriesTable}
+          where chain_id = $1
+          order by parent_block_number desc, log_index desc
+          limit 1
+        `,
+        [chainId]
+      )
+      return result.rows[0]?.transaction_hash ?? null
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code === '42P01') {
+        return null
+      }
+      throw error
+    }
+  }
+
+  // Upserts just the batch_poster column (independent of the ArbOS upsert).
+  async upsertChainBatchPoster(row: {
+    chainId: number
+    batchPoster: string
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.chainRuntimeTable} (chain_id, batch_poster, checked_at)
+        values ($1, $2, $3)
+        on conflict (chain_id) do update
+        set batch_poster = excluded.batch_poster,
+            checked_at = excluded.checked_at
+      `,
+      [row.chainId, row.batchPoster, row.checkedAt]
     )
   }
 
@@ -642,25 +687,49 @@ const arbosNameFor = (version: number): string | null => {
 
 const syncChainRuntime = async (db: MetricsDb) => {
   const checkedAt = new Date().toISOString()
+  const parentRpcUrls = getParentRpcUrls()
 
   await Promise.all(
     getMainnetChains().map(async chain => {
-      // per-chain isolation: child RPCs are public/flaky and some reject the call
+      // ArbOS version — read on the chain's own RPC. Child RPCs are public and
+      // some reject the call, so isolate it from the batch-poster read below.
       try {
         const raw = await getArbOsVersionRaw(chain.rpcUrl)
-        if (!Number.isFinite(raw)) {
-          return
+        if (Number.isFinite(raw)) {
+          const version = raw > ARBOS_VERSION_OFFSET ? raw - ARBOS_VERSION_OFFSET : raw
+          await db.upsertChainArbos({
+            chainId: chain.chainId,
+            arbosRaw: raw,
+            arbosVersion: version,
+            arbosName: arbosNameFor(version),
+            checkedAt,
+          })
         }
-        const version = raw > ARBOS_VERSION_OFFSET ? raw - ARBOS_VERSION_OFFSET : raw
-        await db.upsertChainArbos({
-          chainId: chain.chainId,
-          arbosRaw: raw,
-          arbosVersion: version,
-          arbosName: arbosNameFor(version),
-          checkedAt,
-        })
       } catch (error) {
         console.error(`arbos read failed for ${chain.slug}`, error)
+      }
+
+      // Batch poster — the `from` of the most recent indexed batch tx, read on
+      // the parent chain. Independent of the ArbOS read above.
+      try {
+        const parentRpcUrl = parentRpcUrls[chain.parentChainId]
+        if (!parentRpcUrl) {
+          return
+        }
+        const txHash = await db.getLatestBatchTxHash(chain.chainId)
+        if (!txHash) {
+          return
+        }
+        const sender = await getTransactionSender(parentRpcUrl, txHash)
+        if (sender) {
+          await db.upsertChainBatchPoster({
+            chainId: chain.chainId,
+            batchPoster: sender,
+            checkedAt,
+          })
+        }
+      } catch (error) {
+        console.error(`batch poster read failed for ${chain.slug}`, error)
       }
     })
   )

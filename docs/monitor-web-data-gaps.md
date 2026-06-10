@@ -53,7 +53,8 @@ Practical substitutions already made (no backend change needed):
 | Field | Status | Where it would come from |
 | --- | --- | --- |
 | Last batch age, target, seq #, data location | ✅ live | `batch_deliveries` |
-| **Poster balance** | ❌ gap | worker must snapshot the batch-poster EOA balance on the parent chain |
+| Batch poster EOA | ✅ live | worker reads the `from` of the most recent indexed batch tx on the parent chain → `chain_runtime.batch_poster` |
+| **Poster balance** | ❌ gap | worker must snapshot the batch-poster EOA balance on the parent chain (address is now known, balance/runway still pending) |
 | **Runway (days)** | ❌ gap | derived from poster balance + rolling 24h gas-burn (batch-poster monitor logic) |
 | **Compression ratio** | ❌ gap | needs batch calldata size vs decompressed size (brotli) per batch |
 | **Block backlog** | ❌ gap | `latestChildBlock − lastBlockReported`; needs child-chain head tracking |
@@ -79,8 +80,8 @@ Practical substitutions already made (no backend change needed):
 ### contracts
 | Field | Status | Notes |
 | --- | --- | --- |
-| rollup, sequencerInbox, bridge | ✅ live | portal snapshot `ethBridge` |
-| **inbox, outbox, batchPoster** | ❌ gap | not in the indexed portal snapshot; add to `portalMainnet.json` (and the refresh script) |
+| rollup, sequencerInbox, bridge, inbox, outbox | ✅ live | portal snapshot `ethBridge` (inbox/outbox now carried through `pickChain`) |
+| batchPoster | ✅ live | `chain_runtime.batch_poster` — derived from recent batch tx senders (worker) |
 
 ## Suggested backend follow-ups (rough priority)
 

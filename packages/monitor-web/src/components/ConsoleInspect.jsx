@@ -529,7 +529,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 <KV k="bridge" v={<Ext chainId={c.parentChainId} hash={contracts.bridge} kind="addr" tip="Bridge contract">{contracts.bridge ? contracts.bridge.slice(0, 8) + '…' + contracts.bridge.slice(-4) : null}</Ext>} />
                 <KV k="inbox" v={contracts.inbox ? <Ext chainId={c.parentChainId} hash={contracts.inbox} kind="addr" tip="Inbox contract">{contracts.inbox.slice(0, 8) + '…' + contracts.inbox.slice(-4)}</Ext> : <Gap what="not in portal snapshot" />} />
                 <KV k="outbox" v={contracts.outbox ? <Ext chainId={c.parentChainId} hash={contracts.outbox} kind="addr" tip="Outbox contract">{contracts.outbox.slice(0, 8) + '…' + contracts.outbox.slice(-4)}</Ext> : <Gap what="not in portal snapshot" />} />
-                <KV k={<Tip underline label="The batch-poster EOA isn't a portal config field — it's derived from the sender of recent batch transactions, which isn't surfaced yet.">batchPoster</Tip>} v={<Gap what="batch-poster EOA not derived yet" />} />
+                <KV k={<Tip underline label="The batch-poster EOA — derived from the sender (from) of this chain's most recent indexed batch transaction on the parent chain. Not a portal config field.">batchPoster</Tip>} v={c.batchPoster ? <Ext chainId={c.parentChainId} hash={c.batchPoster} kind="addr" tip="Batch poster EOA (sender of recent batches)">{c.batchPoster.slice(0, 8) + '…' + c.batchPoster.slice(-4)}</Ext> : <Gap what="no batch tx indexed / worker not deployed yet" />} />
               </div>
             </Panel>
           </div>
