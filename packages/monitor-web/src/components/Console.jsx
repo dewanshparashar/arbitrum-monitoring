@@ -104,9 +104,6 @@ function Splash({ frame, progress = 0, error }) {
   )
 }
 
-const heartbeatChar = v =>
-  v == null ? '·' : v >= 99.5 ? '▁' : v >= 99 ? '▃' : v >= 97 ? '▅' : v >= 90 ? '▆' : '█'
-
 const fmtTps = v => (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v).toString())
 
 // TPS is a sampled estimate; for non-zero chains, gently jitter ±~3.5% each
@@ -414,7 +411,7 @@ export function Console() {
                 </span>
                 <span style={col(146)}>
                   <span style={{ color: upColor, letterSpacing: '0px', marginRight: 8 }}>
-                    {c.rpc.uptimePct == null ? '·········' : heartbeatChar(c.rpc.uptimePct).repeat(11)}
+                    {c.rpc.uptimePct == null ? '·········' : '▁'.repeat(11)}
                   </span>
                   <span style={{ color: upColor }}>{c.rpc.uptimePct == null ? 'no data' : c.rpc.uptimePct.toFixed(2) + '%'}</span>
                 </span>
