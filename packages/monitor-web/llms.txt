@@ -1,0 +1,46 @@
+# FleetWatch
+
+> Live operational health for Arbitrum dedicated chains (L2/L3): RPC uptime, bridge TVL, batch-poster cadence, assertion health, retryable tickets, gas token, and ArbOS version. All data is available as read-only JSON over a public, CORS-enabled API — agents can query it directly with no authentication.
+
+FleetWatch continuously indexes Arbitrum dedicated chains and exposes a stateless JSON API at `https://fleetwatch.xyz`. Requests are `GET` only, require no auth, and return `Access-Control-Allow-Origin: *`. Data refreshes roughly every 30s, so polling faster than that is wasteful.
+
+## API endpoints
+
+- `GET https://fleetwatch.xyz/api/fleet/overview` — fleet-wide rollup: chain counts by health, total bridged TVL (USD), total pending withdrawals, open retryables, and total firing alerts.
+- `GET https://fleetwatch.xyz/api/fleet/chains` — array of every monitored chain with per-chain health and metrics (see fields below).
+- `GET https://fleetwatch.xyz/api/fleet/chains/{chainId}` — full detail for one chain by numeric EIP-155 chainId: contracts (rollup, sequencerInbox, bridge, inbox, outbox, batchPoster), recent batches / assertions / retryables, bucketed RPC probe history, pending exits, and the bridged-TVL derivation.
+- `GET https://fleetwatch.xyz/api/fleet/status` — indexing pipeline health: worker heartbeat, per parent-chain indexer freshness (latest indexed block vs live chain head, i.e. how many blocks behind), data freshness timestamps, and the exit backlog.
+- `GET https://fleetwatch.xyz/health` — liveness probe.
+
+## Key fields (per chain, from /api/fleet/chains)
+
+- `chainId` (number), `chainName`, `chainSlug`, `parentChainId`, `parentChainName`
+- `health`: `{ retryable, batch, assertion }`, each `"healthy" | "warning" | "critical"` — the R/B/A decision tree (Retryable / Batch-poster / Assertion).
+- `alerts` (number): count of the three monitors currently not healthy (0–3).
+- `rpcScore` (% uptime over the 8-day window), `latencyMs`, `lastRpcCheckedAt` (unix seconds)
+- `bridgedTvlUsd` (number | null — null when the gas token has no USD price feed), `nativeAmount` + `gasTokenSymbol` (native bridged amount), `bridgedAmount24hUsd`
+- `pendingOutUsd` | `pendingOutNative` + count
+- `lastBatchAt` (unix seconds), `lastBatchSequenceNumber`
+- `latestAssertionCreatedAt`, `latestAssertionConfirmedAt`, `createdAssertions8d`, `confirmedAssertions8d`
+- `openRetryCount`, `expiredRetryableCount`
+- `arbosVersion` (number, e.g. 32), `arbosName` (e.g. "Bianca"), `batchPoster` (EOA address)
+
+## Notes for agents
+
+- No authentication; GET only; CORS open. Responses are `application/json`.
+- USD is `null` where no price feed exists for a chain's custom gas token — use `nativeAmount` + `gasTokenSymbol` instead.
+- `health` values come from the same R/B/A thresholds the UI documents under "? explain".
+- Identify chains by numeric `chainId`.
+
+## Examples
+
+- Chains with any critical monitor:
+  `curl -s https://fleetwatch.xyz/api/fleet/chains | jq '[.[] | select(.health.batch=="critical" or .health.assertion=="critical" or .health.retryable=="critical") | {chainName, health, alerts}]'`
+- Fleet summary:
+  `curl -s https://fleetwatch.xyz/api/fleet/overview | jq`
+- Is the indexer behind?
+  `curl -s https://fleetwatch.xyz/api/fleet/status | jq '.indexer.parents'`
+
+## Source
+
+Open source: https://github.com/dewanshparashar/arbitrum-monitoring
