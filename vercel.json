@@ -13,12 +13,11 @@
   "headers": [
     {
       "source": "/config.js",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store"
-        }
-      ]
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    },
+    {
+      "source": "/(app.js|app.js.map|ds.css)",
+      "headers": [{ "key": "Cache-Control", "value": "no-cache" }]
     }
   ],
   "rewrites": [
