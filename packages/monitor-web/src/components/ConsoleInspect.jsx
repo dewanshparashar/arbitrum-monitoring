@@ -39,7 +39,7 @@ const TvlDerivation = ({ b }) => {
         <b style={{ color: '#fff' }}>Bridged value (native units)</b>
         <br />
         <br />
-        balance: <span style={mono}>{b.balanceNative != null ? F.eth(b.balanceNative, asset) : '—'}</span>
+        balance: <span style={mono}>{b.balanceNative != null ? F.compact(b.balanceNative, asset) : '—'}</span>
         {b.balanceBlockNumber ? ` @ block ${b.balanceBlockNumber}` : ''}
         {b.balanceCheckedAt ? <><br /><span style={{ color: 'var(--text-3)' }}>snapshot {full(b.balanceCheckedAt)}</span></> : null}
         <br />
@@ -55,7 +55,7 @@ const TvlDerivation = ({ b }) => {
       <b style={{ color: '#fff' }}>Bridged TVL = bridge balance × price</b>
       <br />
       <br />
-      balance: <span style={mono}>{F.eth(b.balanceNative, asset)}</span>
+      balance: <span style={mono}>{F.compact(b.balanceNative, asset)}</span>
       {b.balanceBlockNumber ? ` @ block ${b.balanceBlockNumber}` : ''}
       {b.balanceCheckedAt ? <><br /><span style={{ color: 'var(--text-3)' }}>snapshot {full(b.balanceCheckedAt)}</span></> : null}
       <br />
@@ -259,7 +259,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                     c.bridge.tvlUsd != null
                       ? F.money(c.bridge.tvlUsd)
                       : c.bridge.balanceNative != null
-                        ? F.eth(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH')
+                        ? F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH')
                         : <Gap what="no bridge-balance snapshot for this chain" />
                   }
                   color={C.num}
@@ -273,7 +273,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                       Bridge balance
                     </Tip>
                   }
-                  value={c.bridge.balanceNative != null ? F.eth(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH') : <Gap what="no balance snapshot" />}
+                  value={c.bridge.balanceNative != null ? F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH') : <Gap what="no balance snapshot" />}
                   color={C.txt}
                   sub={c.bridge.balanceBlockNumber ? '@ block ' + c.bridge.balanceBlockNumber : null}
                 />
@@ -282,7 +282,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                   value={c.bridge.pendingUsd != null
                     ? F.money(c.bridge.pendingUsd)
                     : c.bridge.pendingNative
-                      ? F.eth(c.bridge.pendingNative, c.bridge.balanceAsset || c.native)
+                      ? F.compact(c.bridge.pendingNative, c.bridge.balanceAsset || c.native)
                       : <Gap what="no pending exits indexed (exit_messages empty for this chain)" />}
                   color={c.bridge.pendingCount > 100 ? C.warn : C.txt}
                   sub={c.bridge.pendingCount + ' claims'}
@@ -300,7 +300,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
               </div>
               <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--hairline)', color: C.com, fontSize: 11 }}>
                 {c.bridge.tvlUsd != null ? 'TVL = ' : 'bridged = '}
-                <span style={{ color: C.txt }}>{c.bridge.balanceNative != null ? F.eth(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH') : '—'}</span>
+                <span style={{ color: C.txt }}>{c.bridge.balanceNative != null ? F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH') : '—'}</span>
                 {c.bridge.tvlUsd != null ? <>{' × '}<span style={{ color: C.txt }}>{F.price(c.bridge.priceUsd)}</span></> : null}
                 {' · '}
                 {c.gasToken ? (
@@ -398,7 +398,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 vColor={C.txt}
               />
               <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 8, paddingTop: 8 }}>
-                <KV k={<Tip underline label="On-chain balance of the batch-poster EOA on the parent chain (it pays posting gas from this), read by the worker each cycle.">poster balance</Tip>} v={c.batch.posterBalanceEth != null ? F.eth(c.batch.posterBalanceEth, 'ETH') : <Gap what="batch poster not resolved / worker not deployed yet" />} vColor={c.batch.posterBalanceEth != null && c.batch.posterBalanceEth < 0.05 ? C.warn : C.txt} />
+                <KV k={<Tip underline label="On-chain balance of the batch-poster EOA on the parent chain (it pays posting gas from this), read by the worker each cycle.">poster balance</Tip>} v={c.batch.posterBalanceEth != null ? F.compact(c.batch.posterBalanceEth, 'ETH') : <Gap what="batch poster not resolved / worker not deployed yet" />} vColor={c.batch.posterBalanceEth != null && c.batch.posterBalanceEth < 0.05 ? C.warn : C.txt} />
                 <KV k={<Tip underline label="Days the batch poster can keep posting before running dry — poster balance ÷ estimated daily gas burn (avg fee of recent batch txs × batches posted in 24h). Estimate.">runway</Tip>} v={c.batch.runwayDays != null ? '~' + (c.batch.runwayDays >= 1000 ? F.compact(c.batch.runwayDays) : c.batch.runwayDays.toFixed(c.batch.runwayDays < 10 ? 1 : 0)) + ' days' : <Gap what="no batch activity in 24h / worker not deployed yet" />} vColor={c.batch.runwayDays != null && c.batch.runwayDays < 7 ? C.crit : c.batch.runwayDays != null && c.batch.runwayDays < 30 ? C.warn : C.txt} />
                 <KV k={<Tip underline label="Calldata compression ratio (brotli).">compression</Tip>} v={<Gap what="needs per-batch calldata analysis (follow-up)" />} />
                 <KV k={<Tip underline label="Child-chain blocks produced but not yet reported in a batch = chain head − last batch's max block.">block backlog</Tip>} v={c.batch.blockBacklog != null ? F.num(c.batch.blockBacklog) + ' blocks' : <Gap what="needs child head + a batch (worker not deployed yet)" />} vColor={c.batch.blockBacklog != null && c.batch.blockBacklog > 50000 ? C.warn : C.txt} />
@@ -440,7 +440,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
               />
               <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 8, paddingTop: 8 }}>
                 <KV k={<Tip underline label="Validation access — whether anyone can validate (permissionless / BoLD) or only a whitelisted set. Read on-chain from Rollup.validatorWhitelistDisabled().">validators</Tip>} v={c.assertion.whitelistDisabled == null ? <Gap what="rollup read failed / worker not deployed yet" /> : (c.assertion.whitelistDisabled ? 'permissionless' : 'whitelisted')} vColor={c.assertion.whitelistDisabled === false ? C.warn : C.txt} />
-                <KV k={<Tip underline label="Minimum stake a validator must bond, read on-chain from Rollup.baseStake(). BoLD chains alert below 1 ETH.">base stake</Tip>} v={c.assertion.baseStakeEth != null ? F.eth(c.assertion.baseStakeEth, 'ETH') : <Gap what="rollup read failed / worker not deployed yet" />} vColor={c.assertion.baseStakeEth != null && c.assertion.baseStakeEth < 1 ? C.warn : C.txt} />
+                <KV k={<Tip underline label="Minimum stake a validator must bond, read on-chain from Rollup.baseStake(). BoLD chains alert below 1 ETH.">base stake</Tip>} v={c.assertion.baseStakeEth != null ? F.compact(c.assertion.baseStakeEth, 'ETH') : <Gap what="rollup read failed / worker not deployed yet" />} vColor={c.assertion.baseStakeEth != null && c.assertion.baseStakeEth < 1 ? C.warn : C.txt} />
               </div>
             </Panel>
 
