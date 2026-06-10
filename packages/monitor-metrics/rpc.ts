@@ -211,6 +211,19 @@ export const getTransactionSender = async (rpcUrl: string, txHash: string) => {
   return tx?.from ? tx.from.toLowerCase() : null
 }
 
+// Tx fee (wei) = gasUsed × effectiveGasPrice from the receipt. Used to estimate
+// the batch poster's gas burn. Returns null if the receipt isn't available.
+export const getTransactionFeeWei = async (rpcUrl: string, txHash: string) => {
+  const r = await rpcCall<{ gasUsed?: string; effectiveGasPrice?: string } | null>(
+    rpcUrl,
+    'eth_getTransactionReceipt',
+    [txHash],
+    { retries: 1 }
+  )
+  if (!r || r.gasUsed == null || r.effectiveGasPrice == null) return null
+  return BigInt(r.gasUsed) * BigInt(r.effectiveGasPrice)
+}
+
 export const getArbOsVersionRaw = async (rpcUrl: string) => {
   const data = arbSysInterface.encodeFunctionData('arbOSVersion')
   const result = await rpcCall<string>(

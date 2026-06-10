@@ -14,6 +14,7 @@ import {
   getErc20Decimals,
   getLogs,
   getRollupBaseStake,
+  getTransactionFeeWei,
   getTransactionSender,
   getValidatorWhitelistDisabled,
   l2ToL1Topic,
@@ -171,6 +172,7 @@ class MetricsDb {
       'base_stake_wei numeric(78, 0)',
       'validator_whitelist_disabled boolean',
       'child_head_block numeric(78, 0)',
+      'daily_burn_wei numeric(78, 0)',
     ]) {
       await this.pool.query(`alter table ${this.chainRuntimeTable} add column if not exists ${col}`)
     }
@@ -272,46 +274,63 @@ class MetricsDb {
     )
   }
 
-  // Most recent indexed batch transaction hash for a chain (parent-chain tx).
-  async getLatestBatchTxHash(chainId: number) {
+  // Recent batch tx hashes (newest first) + how many batches posted in the last
+  // 24h — inputs for resolving the poster and estimating its daily gas burn.
+  async getBatchBurnSample(chainId: number, limit: number) {
     try {
-      const result = await this.pool.query<{ transaction_hash: string }>(
-        `
-          select transaction_hash
-          from ${this.batchDeliveriesTable}
-          where chain_id = $1
-          order by parent_block_number desc, log_index desc
-          limit 1
-        `,
-        [chainId]
-      )
-      return result.rows[0]?.transaction_hash ?? null
+      const [recent, count] = await Promise.all([
+        this.pool.query<{ transaction_hash: string }>(
+          `
+            select transaction_hash
+            from ${this.batchDeliveriesTable}
+            where chain_id = $1
+            order by parent_block_number desc, log_index desc
+            limit $2
+          `,
+          [chainId, limit]
+        ),
+        this.pool.query<{ n: number }>(
+          `
+            select count(*)::int as n
+            from ${this.batchDeliveriesTable}
+            where chain_id = $1
+              and parent_block_timestamp >= cast(extract(epoch from now()) as bigint) - 86400
+          `,
+          [chainId]
+        ),
+      ])
+      return {
+        hashes: recent.rows.map(r => r.transaction_hash),
+        count24h: count.rows[0]?.n ?? 0,
+      }
     } catch (error) {
       const code = (error as { code?: string }).code
       if (code === '42P01') {
-        return null
+        return { hashes: [] as string[], count24h: 0 }
       }
       throw error
     }
   }
 
-  // Batch poster EOA + its parent-chain balance (wei).
+  // Batch poster EOA + its parent-chain balance + estimated 24h gas burn (wei).
   async upsertChainBatchPoster(row: {
     chainId: number
     batchPoster: string
     posterBalanceWei: string | null
+    dailyBurnWei: string | null
     checkedAt: string
   }) {
     await this.pool.query(
       `
-        insert into ${this.chainRuntimeTable} (chain_id, batch_poster, poster_balance_wei, checked_at)
-        values ($1, $2, $3, $4)
+        insert into ${this.chainRuntimeTable} (chain_id, batch_poster, poster_balance_wei, daily_burn_wei, checked_at)
+        values ($1, $2, $3, $4, $5)
         on conflict (chain_id) do update
         set batch_poster = excluded.batch_poster,
             poster_balance_wei = excluded.poster_balance_wei,
+            daily_burn_wei = excluded.daily_burn_wei,
             checked_at = excluded.checked_at
       `,
-      [row.chainId, row.batchPoster, row.posterBalanceWei, row.checkedAt]
+      [row.chainId, row.batchPoster, row.posterBalanceWei, row.dailyBurnWei, row.checkedAt]
     )
   }
 
@@ -804,33 +823,49 @@ const syncChainRuntime = async (db: MetricsDb) => {
       }
 
       // Batch poster — the `from` of the most recent indexed batch tx, read on
-      // the parent chain. Independent of the ArbOS read above.
+      // the parent chain. Also snapshots its balance and estimates 24h gas burn
+      // (avg fee of the last few batch txs × batches posted in 24h) for runway.
       try {
         const parentRpcUrl = parentRpcUrls[chain.parentChainId]
         if (!parentRpcUrl) {
           return
         }
-        const txHash = await db.getLatestBatchTxHash(chain.chainId)
-        if (!txHash) {
+        const { hashes, count24h } = await db.getBatchBurnSample(chain.chainId, 3)
+        if (!hashes.length) {
           return
         }
-        const sender = await getTransactionSender(parentRpcUrl, txHash)
-        if (sender) {
-          // also snapshot the poster's parent-chain balance (it pays gas in
-          // the parent's native asset)
-          let posterBalanceWei: string | null = null
-          try {
-            posterBalanceWei = (await getBalance(parentRpcUrl, sender)).toString()
-          } catch {
-            posterBalanceWei = null
-          }
-          await db.upsertChainBatchPoster({
-            chainId: chain.chainId,
-            batchPoster: sender,
-            posterBalanceWei,
-            checkedAt,
-          })
+        const sender = await getTransactionSender(parentRpcUrl, hashes[0])
+        if (!sender) {
+          return
         }
+
+        let posterBalanceWei: string | null = null
+        try {
+          posterBalanceWei = (await getBalance(parentRpcUrl, sender)).toString()
+        } catch {
+          posterBalanceWei = null
+        }
+
+        let dailyBurnWei: string | null = null
+        try {
+          const fees = (
+            await Promise.all(hashes.map(h => getTransactionFeeWei(parentRpcUrl, h).catch(() => null)))
+          ).filter((f): f is bigint => f != null)
+          if (fees.length && count24h > 0) {
+            const avg = fees.reduce((sum, f) => sum + f, 0n) / BigInt(fees.length)
+            dailyBurnWei = (avg * BigInt(count24h)).toString()
+          }
+        } catch {
+          dailyBurnWei = null
+        }
+
+        await db.upsertChainBatchPoster({
+          chainId: chain.chainId,
+          batchPoster: sender,
+          posterBalanceWei,
+          dailyBurnWei,
+          checkedAt,
+        })
       } catch (error) {
         console.error(`batch poster read failed for ${chain.slug}`, error)
       }

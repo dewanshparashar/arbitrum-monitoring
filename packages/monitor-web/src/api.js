@@ -171,6 +171,7 @@ export const toViewChain = c => {
       seqNum: c.lastBatchSequenceNumber,
       posterBalanceEth: c.posterBalanceWei != null ? Number(c.posterBalanceWei) / 1e18 : null,
       blockBacklog: c.blockBacklog ?? null,
+      runwayDays: c.runwayDays ?? null,
     },
     assertion: {
       lastMins: minsSince(c.latestAssertionCreatedAt),

@@ -56,7 +56,7 @@ Practical substitutions already made (no backend change needed):
 | Batch poster EOA | ✅ live | worker reads the `from` of the most recent indexed batch tx on the parent chain → `chain_runtime.batch_poster` |
 | Poster balance | ✅ live | worker `eth_getBalance(batchPoster)` on the parent chain each cycle → `chain_runtime.poster_balance_wei` |
 | Block backlog | ✅ live | `child_head_block − latest batch max_block_number` (worker samples child head; indexer provides the batch's max block) |
-| **Runway (days)** | ❌ gap | poster balance ÷ rolling 24h gas-burn — balance is live, gas-burn (per-batch tx fees over 24h) still pending |
+| Runway (days, estimate) | ✅ live | poster balance ÷ estimated daily gas burn (avg fee of the last few batch-tx receipts × batches posted in 24h) → `chain_runtime.daily_burn_wei` |
 | **Compression ratio** | ❌ gap | needs batch calldata size vs decompressed size (brotli) per batch |
 | **DAC committee online/total** | ❌ gap | needs DAC keyset / committee health probing for AnyTrust chains |
 

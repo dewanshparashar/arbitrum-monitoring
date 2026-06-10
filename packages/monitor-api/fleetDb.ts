@@ -78,6 +78,7 @@ type ChainRuntimeRow = {
   base_stake_wei: string | null
   validator_whitelist_disabled: boolean | null
   child_head_block: string | null
+  daily_burn_wei: string | null
   checked_at_epoch: number | null
 }
 
@@ -156,6 +157,7 @@ type FleetChain = {
   posterBalanceWei: string | null
   baseStakeWei: string | null
   validatorWhitelistDisabled: boolean | null
+  runwayDays: number | null
   tps: number | null
   blockBacklog: number | null
   runtimeCheckedAt: number | null
@@ -772,6 +774,13 @@ export class FleetDb {
           posterBalanceWei: runtime?.poster_balance_wei ?? null,
           baseStakeWei: runtime?.base_stake_wei ?? null,
           validatorWhitelistDisabled: runtime?.validator_whitelist_disabled ?? null,
+          // runway (days) = poster balance ÷ estimated daily gas burn
+          runwayDays:
+            runtime?.poster_balance_wei != null &&
+            runtime?.daily_burn_wei != null &&
+            Number(runtime.daily_burn_wei) > 0
+              ? Number(runtime.poster_balance_wei) / Number(runtime.daily_burn_wei)
+              : null,
           tps: runtime?.tps != null ? Number(runtime.tps) : null,
           // block backlog = child head − last L2 block reported in a batch
           blockBacklog:
