@@ -31,43 +31,74 @@ const POLL_MS = 30_000
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const BANNER = [
-  '  ▄▀█ █▀█ █▄▄   █▀▄▀█ █▀█ █▄░█ █ ▀█▀ █▀█ █▀█',
-  '  █▀█ █▀▄ █▄█   █░▀░█ █▄█ █░▀█ █ ░█░ █▄█ █▀▄',
+  '╔═╗╦  ╔═╗╔═╗╔╦╗  ╦ ╦╔═╗╔╦╗╔═╗╦ ╦',
+  '╠╣ ║  ║╣ ║╣  ║   ║║║╠═╣ ║ ║  ╠═╣',
+  '╚  ╩═╝╚═╝╚═╝ ╩   ╚╩╝╩ ╩ ╩ ╚═╝╩ ╩',
 ]
+// minimum time the boot splash is shown (ms) — even if data loads faster
+const SPLASH_MS = 7000
 
-// terminal boot splash shown while the first fleet fetch is in flight
-function Splash({ frame, error }) {
+// centered terminal boot splash — animates over SPLASH_MS with an ASCII
+// progress bar and a sequential boot log. `progress` is 0..1.
+function Splash({ frame, progress = 0, error }) {
   const C2 = { com: '#5A6478', str: '#3DD68C', warn: '#F5B544', crit: '#FF5C6C', num: '#12AAFF', fn: '#82AAFF' }
-  const lines = [
-    ['initializing fleet register', 'ok'],
-    ['loading portal snapshot · mainnet orbit chains', 'ok'],
-    ['connecting to indexer @ hetzner-fsn1', error ? 'fail' : 'pend'],
-    ['fetching fleet overview + chain health', error ? 'skip' : 'pend'],
+  const steps = [
+    'initializing fleet register',
+    'loading portal snapshot · mainnet orbit chains',
+    'connecting to indexer @ hetzner-fsn1',
+    'fetching fleet overview + chain health',
+    'rendering console',
   ]
+  // how many steps have completed, derived from elapsed progress
+  const done = Math.min(steps.length, Math.floor(progress * steps.length))
+  const stateFor = i => {
+    if (error) {
+      if (i < 2) return 'ok'
+      if (i === 2) return 'fail'
+      return 'skip'
+    }
+    if (i < done) return 'ok'
+    if (i === done) return 'pend'
+    return 'wait'
+  }
+  const BARW = 30
+  const filled = Math.max(0, Math.min(BARW, Math.round(progress * BARW)))
+  const pct = Math.round(progress * 100)
+  const barColor = error ? C2.crit : C2.num
+
   return (
-    <div style={{ padding: '40px 18px', fontFamily: 'var(--mono)' }}>
-      <pre style={{ margin: 0, lineHeight: 1.15, fontSize: 13, color: 'var(--arb-cyan)', textShadow: '0 0 18px rgba(18,170,255,0.35)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'var(--mono)' }}>
+      <pre style={{ margin: 0, lineHeight: 1.12, fontSize: 'clamp(11px, 2.1vw, 17px)', color: 'var(--arb-cyan)', textShadow: '0 0 22px rgba(18,170,255,0.45)' }}>
         {BANNER.join('\n')}
       </pre>
-      <div style={{ color: 'var(--text-4)', fontSize: 12, margin: '6px 0 24px 2px', letterSpacing: '0.14em' }}>
-        FLEET WATCH · INDEXED 8-DAY WINDOW
+      <div style={{ color: 'var(--text-4)', fontSize: 11.5, margin: '12px 0 26px', letterSpacing: '0.22em' }}>
+        FLEETWATCH.XYZ · ARBITRUM ORBIT FLEET MONITOR
       </div>
-      <div style={{ fontSize: 12.5, lineHeight: '24px' }}>
-        {lines.map(([label, state], i) => (
-          <div key={i} style={{ color: C2.com }}>
-            <span style={{ color: state === 'fail' ? C2.crit : C2.str, marginRight: 10 }}>
-              {state === 'ok' ? '✓' : state === 'fail' ? '✖' : state === 'skip' ? '·' : SPINNER[frame]}
-            </span>
-            {label}
-            {' '}
-            <span style={{ color: C2.com }}>{'.'.repeat(Math.max(0, 44 - label.length))}</span>{' '}
-            {state === 'ok' && <span style={{ color: C2.str }}>ok</span>}
-            {state === 'fail' && <span style={{ color: C2.crit }}>failed</span>}
-            {state === 'pend' && <span style={{ color: C2.warn }}>…</span>}
-          </div>
-        ))}
-        {error && <div style={{ color: C2.crit, marginTop: 14 }}>! {error}</div>}
+      <div style={{ width: 'min(520px, 88vw)', fontSize: 12.5, lineHeight: '25px', textAlign: 'left' }}>
+        {steps.map((label, i) => {
+          const state = stateFor(i)
+          const dots = '.'.repeat(Math.max(0, 46 - label.length))
+          return (
+            <div key={i} style={{ color: state === 'wait' ? 'rgba(90,100,120,0.45)' : C2.com }}>
+              <span style={{ color: state === 'fail' ? C2.crit : state === 'wait' ? C2.com : C2.str, marginRight: 10 }}>
+                {state === 'ok' ? '✓' : state === 'fail' ? '✖' : state === 'skip' ? '·' : state === 'pend' ? SPINNER[frame] : '○'}
+              </span>
+              {label} <span style={{ color: 'rgba(90,100,120,0.5)' }}>{dots}</span>{' '}
+              {state === 'ok' && <span style={{ color: C2.str }}>ok</span>}
+              {state === 'fail' && <span style={{ color: C2.crit }}>failed</span>}
+              {state === 'pend' && <span style={{ color: C2.warn }}>…</span>}
+            </div>
+          )
+        })}
       </div>
+      <div style={{ marginTop: 22, fontSize: 13, color: barColor, letterSpacing: '0.04em' }}>
+        <span style={{ opacity: 0.85 }}>[</span>
+        <span>{'█'.repeat(filled)}</span>
+        <span style={{ color: 'rgba(90,100,120,0.5)' }}>{'░'.repeat(BARW - filled)}</span>
+        <span style={{ opacity: 0.85 }}>]</span>
+        <span style={{ marginLeft: 10, color: C2.com }}>{pct}%</span>
+      </div>
+      {error && <div style={{ color: C2.crit, marginTop: 16, fontSize: 12.5 }}>! {error}</div>}
     </div>
   )
 }
@@ -89,9 +120,21 @@ export function Console() {
   const closeInspect = React.useCallback(() => setSelected(null), [])
   const closeLegend = React.useCallback(() => setShowLegend(false), [])
 
-  // Spinner only animates during the initial splash — never while the table
+  // The boot splash shows for at least SPLASH_MS, and longer if data is still
+  // loading. `elapsed` drives the progress bar + sequential boot log.
+  const [elapsed, setElapsed] = React.useState(0)
+  const minElapsed = elapsed >= SPLASH_MS
+  React.useEffect(() => {
+    if (minElapsed) return undefined
+    const t = setInterval(() => setElapsed(e => Math.min(e + 100, SPLASH_MS)), 100)
+    return () => clearInterval(t)
+  }, [minElapsed])
+
+  const splashing = !minElapsed || (status === 'loading' && chains.length === 0)
+  const splashProgress = Math.min(1, elapsed / SPLASH_MS)
+
+  // Spinner only animates during the splash — never while the table
   // (and any open tooltip/inspector) is mounted.
-  const splashing = status === 'loading' && chains.length === 0
   React.useEffect(() => {
     if (!splashing) return undefined
     const s = setInterval(() => setFrame(f => (f + 1) % SPINNER.length), 90)
@@ -170,7 +213,7 @@ export function Console() {
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#28C840' }} />
         </span>
         <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.02em' }}>
-          arb-monitor — fleet watch — zsh — 142×48
+          fleetwatch — arbitrum orbit fleet monitor — zsh — 142×48
         </span>
         <button
           onClick={() => setShowLegend(true)}
@@ -183,9 +226,11 @@ export function Console() {
       </div>
 
       {/* terminal body */}
-      <div style={{ padding: '16px 18px 6px', flex: 1, ...mono, color: C.txt, overflowX: 'auto' }}>
+      <div style={{ padding: '16px 18px 38px', flex: 1, ...mono, color: C.txt, overflowX: 'auto' }}>
         {splashing ? (
-          <Splash frame={frame} error={null} />
+          <div style={{ minHeight: 'calc(100vh - 150px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Splash frame={frame} progress={splashProgress} error={status === 'error' ? error : null} />
+          </div>
         ) : (
         <div style={{ minWidth: 1020 }}>
           {/* command + boot log */}
@@ -363,8 +408,8 @@ export function Console() {
         )}
       </div>
 
-      {/* status bar (VS Code style) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 0, background: 'var(--arb-blue)', color: '#fff', fontSize: 11.5, height: 26 }}>
+      {/* status bar (VS Code style) — fixed to the bottom of the viewport */}
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 30, display: 'flex', alignItems: 'center', gap: 0, background: 'var(--arb-blue)', color: '#fff', fontSize: 11.5, height: 26 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 11px', background: 'rgba(0,0,0,0.18)', height: '100%' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: fleet.crit ? '#FFB4BC' : '#B8F5D6' }} />
           {status === 'error' ? 'disconnected' : fleet.crit ? 'partial outage' : fleet.warn ? 'degraded' : 'operational'}
