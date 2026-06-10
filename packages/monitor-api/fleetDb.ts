@@ -123,6 +123,8 @@ type FleetChain = {
   rpcChecks8d: number
   lastRpcCheckedAt: number | null
   latencyMs: number | null
+  raasProvider: string | null
+  rpcHost: string | null
   nativeAssetKey: string | null
   gasTokenSymbol: string | null
   gasTokenAddress: string | null
@@ -151,6 +153,44 @@ type FleetChain = {
 const PRICE_SOURCE = 'coingecko'
 // number of bars the inspector's RPC uptime strip is bucketed into
 const RPC_HISTORY_BUCKETS = 40
+
+// RaaS / infra provider inferred from the chain's public RPC host. Best-effort:
+// many chains use vanity domains and can't be attributed (→ null).
+const RAAS_BY_DOMAIN: Array<[string, string]> = [
+  ['alchemy.com', 'Alchemy'],
+  ['calderachain.xyz', 'Caldera'],
+  ['caldera.xyz', 'Caldera'],
+  ['caldera.dev', 'Caldera'],
+  ['conduit.xyz', 'Conduit'],
+  ['conduit-', 'Conduit'],
+  ['gelato.cloud', 'Gelato'],
+  ['gelato.digital', 'Gelato'],
+  ['alt.technology', 'AltLayer'],
+  ['altlayer', 'AltLayer'],
+  ['quiknode.pro', 'QuickNode'],
+  ['quicknode', 'QuickNode'],
+  ['infura.io', 'Infura'],
+  ['ankr.com', 'Ankr'],
+  ['zeeve', 'Zeeve'],
+]
+
+const hostOf = (url?: string) => {
+  if (!url) return null
+  try {
+    return new URL(url).hostname.toLowerCase()
+  } catch {
+    return url.toLowerCase()
+  }
+}
+
+const inferRaasProvider = (rpcUrl?: string) => {
+  const host = hostOf(rpcUrl)
+  if (!host) return null
+  for (const [needle, name] of RAAS_BY_DOMAIN) {
+    if (host.includes(needle)) return name
+  }
+  return null
+}
 
 const parentChainNames: Record<number, string> = {
   1: 'Ethereum',
@@ -605,6 +645,8 @@ export class FleetDb {
           rpcChecks8d,
           lastRpcCheckedAt: rpc?.last_checked_at ?? null,
           latencyMs: rpc?.latency_ms ?? null,
+          raasProvider: inferRaasProvider(chain.rpcUrl),
+          rpcHost: hostOf(chain.rpcUrl),
           nativeAssetKey: balance?.asset_key ?? null,
           gasTokenSymbol: chain.nativeTokenSymbol ?? null,
           gasTokenAddress: chain.nativeToken ?? null,

@@ -222,6 +222,7 @@ export const HEADERS = {
   id: 'The chain\'s EIP-155 chain ID.',
   native: 'The chain\'s native gas token. ETH for standard chains; a custom ERC-20 symbol (e.g. XAI, APE) for custom-gas-token chains — that token is what\'s locked in the bridge and measured for TVL.',
   arbos: 'ArbOS version running on the chain, read on-chain via ArbSys.arbOSVersion() (with the documented −55 offset) and mapped to its release name (Atlas/Bianca/Callisto/Dia/Elara). — = the chain\'s RPC didn\'t answer the call.',
+  raas: 'The Rollup-as-a-Service / infra provider (Alchemy, Caldera, Conduit, Gelato, AltLayer…), inferred from the chain\'s public RPC host. Best-effort — chains on vanity domains show — and can\'t be attributed.',
   parent: 'The settlement (parent) chain this chain posts its batches and assertions to.',
   type: 'Data availability + dispute protocol. rollup = tx data posted on-chain as calldata; anytrust = a Data Availability Committee (DAC) holds the data. +bold = BoLD permissionless dispute protocol (vs whitelisted "classic").',
   tvl: 'Value of the native asset (ETH, or the chain\'s custom gas token) locked in the canonical bridge × its USD price. USD shows only where a price feed exists; custom gas tokens without a feed show n/a here and the native amount in the inspector.',

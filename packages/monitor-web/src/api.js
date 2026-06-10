@@ -127,6 +127,8 @@ export const toViewChain = c => {
       raw: c.arbosRaw ?? null,
       checkedAt: c.runtimeCheckedAt ?? null,
     },
+    raas: c.raasProvider ?? null,
+    rpcHost: c.rpcHost ?? null,
     batchPoster: c.batchPoster ?? null,
     health: overallHealth(c.health),
     monRaw: c.health, // { retryable, batch, assertion } raw API statuses

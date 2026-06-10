@@ -309,6 +309,7 @@ export function Console() {
             <span style={col(96)}><Tip underline w={280} label={HEADERS.type}>type</Tip></span>
             <span style={col(58)}><Tip underline w={250} label={HEADERS.native}>gas</Tip></span>
             <span style={col(96)}><Tip underline w={300} label={HEADERS.arbos}>arbos</Tip></span>
+            <span style={col(86)}><Tip underline w={290} label={HEADERS.raas}>raas</Tip></span>
             <span style={col(56, 'center')}>
               <Tip underline w={290} label={<span><b style={{ color: '#fff' }}>Monitor triad</b> — the alert decision tree.<br /><b style={{ color: '#82AAFF' }}>R</b> Retryable · cross-chain message health<br /><b style={{ color: '#82AAFF' }}>B</b> Batch poster · sequencer posting &amp; cadence<br /><b style={{ color: '#82AAFF' }}>A</b> Assertion · validator / confirmation health<br /><span style={{ color: 'var(--text-3)' }}>Hover a row's dots for that chain's verdict · click <b>? explain</b> for full rules.</span></span>}>r b a</Tip>
             </span>
@@ -351,6 +352,15 @@ export function Console() {
                         <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>{c.arbos.version}{c.arbos.name ? ' ' + c.arbos.name : ''}</span>
                       </Tip>
                     : '—'}
+                </span>
+                <span style={{ ...col(86), color: c.raas ? C.kw : C.com }}>
+                  {c.raas
+                    ? <Tip w={300} label={<>Infra / RaaS provider <b style={{ color: '#fff' }}>{c.raas}</b>, inferred from the chain's public RPC host{c.rpcHost ? <> (<span style={{ fontFamily: 'var(--mono)' }}>{c.rpcHost}</span>)</> : ''}. Best-effort — chains on vanity domains can't be attributed.</>}>
+                        <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>{c.raas}</span>
+                      </Tip>
+                    : c.rpcHost
+                      ? <Tip w={280} label={<>No known RaaS provider for this chain's RPC host (<span style={{ fontFamily: 'var(--mono)' }}>{c.rpcHost}</span>) — likely self-hosted or a vanity domain.</>}><span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>—</span></Tip>
+                      : '—'}
                 </span>
                 <span style={col(56, 'center')}>
                   <Tip w={230} label={<span><b style={{ color: stColor[m.R] }}>R</b>etryable: {m.R}<br /><b style={{ color: stColor[m.B] }}>B</b>atch poster: {m.B}<br /><b style={{ color: stColor[m.A] }}>A</b>ssertion: {m.A}</span>}>
