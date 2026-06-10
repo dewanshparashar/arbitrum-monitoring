@@ -32,7 +32,7 @@ const readConfig = () =>
       },
       logChunkSize: {
         type: 'number',
-        default: Number(process.env.MONITOR_METRICS_LOG_CHUNK_SIZE || 20000),
+        default: Number(process.env.MONITOR_METRICS_LOG_CHUNK_SIZE || 10000),
       },
     })
     .strict()
