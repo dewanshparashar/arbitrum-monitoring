@@ -29,7 +29,7 @@ await build({
   logLevel: 'info',
 })
 
-for (const file of ['index.html', 'src/ds.css', 'config.js', 'server.js']) {
+for (const file of ['index.html', 'src/ds.css', 'config.js', 'server.js', 'og.png']) {
   await copyFile(join(root, file), join(dist, file.replace(/^src\//, '')))
 }
 

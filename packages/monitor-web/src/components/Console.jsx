@@ -36,7 +36,7 @@ const BANNER = [
   '╚  ╩═╝╚═╝╚═╝ ╩   ╚╩╝╩ ╩ ╩ ╚═╝╩ ╩',
 ]
 // minimum time the boot splash is shown (ms) — even if data loads faster
-const SPLASH_MS = 7000
+const SPLASH_MS = 5000
 
 // centered terminal boot splash — animates over SPLASH_MS with an ASCII
 // progress bar and a sequential boot log. `progress` is 0..1.
@@ -44,7 +44,7 @@ function Splash({ frame, progress = 0, error }) {
   const C2 = { com: '#5A6478', str: '#3DD68C', warn: '#F5B544', crit: '#FF5C6C', num: '#12AAFF', fn: '#82AAFF' }
   const steps = [
     'initializing fleet register',
-    'loading portal snapshot · mainnet orbit chains',
+    'loading portal snapshot · arbitrum dedicated chains',
     'connecting to indexer @ hetzner-fsn1',
     'fetching fleet overview + chain health',
     'rendering console',
@@ -72,7 +72,7 @@ function Splash({ frame, progress = 0, error }) {
         {BANNER.join('\n')}
       </pre>
       <div style={{ color: 'var(--text-4)', fontSize: 11.5, margin: '12px 0 26px', letterSpacing: '0.22em' }}>
-        FLEETWATCH.XYZ · ARBITRUM ORBIT FLEET MONITOR
+        FLEETWATCH.XYZ · ARBITRUM DEDICATED CHAINS · FLEET MONITOR
       </div>
       <div style={{ width: 'min(520px, 88vw)', fontSize: 12.5, lineHeight: '25px', textAlign: 'left' }}>
         {steps.map((label, i) => {
@@ -213,7 +213,7 @@ export function Console() {
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#28C840' }} />
         </span>
         <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.02em' }}>
-          fleetwatch — arbitrum orbit fleet monitor — zsh — 142×48
+          fleetwatch — arbitrum dedicated chains fleet monitor — zsh — 142×48
         </span>
         <button
           onClick={() => setShowLegend(true)}

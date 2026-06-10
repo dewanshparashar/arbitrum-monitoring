@@ -210,7 +210,7 @@ export const whyIndexing = status => {
 
 // ---- static reference content for column headers ----
 export const HEADERS = {
-  chain: 'The Orbit / Arbitrum chain being monitored. Click any row to inspect it.',
+  chain: 'The Arbitrum dedicated chain being monitored. Click any row to inspect it.',
   id: 'The chain\'s EIP-155 chain ID.',
   native: 'The chain\'s native gas token. ETH for standard chains; a custom ERC-20 symbol (e.g. XAI, APE) for custom-gas-token chains — that token is what\'s locked in the bridge and measured for TVL.',
   arbos: 'ArbOS version running on the chain, read on-chain via ArbSys.arbOSVersion() (with the documented −55 offset) and mapped to its release name (Atlas/Bianca/Callisto/Dia/Elara). — = the chain\'s RPC didn\'t answer the call.',
