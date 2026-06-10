@@ -256,14 +256,12 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                     </Tip>
                   }
                   value={
-                    c.bridge.tvlUsd != null
-                      ? F.money(c.bridge.tvlUsd)
-                      : c.bridge.balanceNative != null
-                        ? F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH')
-                        : <Gap what="no bridge-balance snapshot for this chain" />
+                    c.bridge.balanceNative != null
+                      ? F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH')
+                      : <Gap what="no bridge-balance snapshot for this chain" />
                   }
                   color={C.num}
-                  sub={c.bridge.tvlUsd == null && c.bridge.balanceNative != null ? 'native units · no USD price' : null}
+                  sub={c.bridge.balanceNative != null ? (c.bridge.tvlUsd != null ? F.money(c.bridge.tvlUsd) : 'no USD price feed') : null}
                 />
                 <Metric
                   label={
@@ -279,13 +277,11 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 />
                 <Metric
                   label={<Tip underline w={300} label={<>Native-asset value in L2→L1 messages that left the chain but aren't yet claimed on the parent. Worker-derived (not indexed): <span style={{ fontFamily: 'var(--mono)' }}>ArbSys.L2ToL1Tx</span> events minus the parent <span style={{ fontFamily: 'var(--mono)' }}>Outbox.OutBoxTransactionExecuted</span>, summed by callvalue (18-dec native). Native-value only — pure ERC-20 withdrawals are excluded. USD where a price feed exists, else the gas token. Full algorithm in <b>? explain</b>.</>}>Pending withdrawals</Tip>}
-                  value={c.bridge.pendingUsd != null
-                    ? F.money(c.bridge.pendingUsd)
-                    : c.bridge.pendingNative
-                      ? F.compact(c.bridge.pendingNative, c.bridge.balanceAsset || c.native)
-                      : <Gap what="no pending exits indexed (exit_messages empty for this chain)" />}
+                  value={c.bridge.pendingNative
+                    ? F.compact(c.bridge.pendingNative, c.bridge.balanceAsset || c.native)
+                    : <Gap what="no pending exits indexed (exit_messages empty for this chain)" />}
                   color={c.bridge.pendingCount > 100 ? C.warn : C.txt}
-                  sub={c.bridge.pendingCount + ' claims'}
+                  sub={(c.bridge.pendingUsd != null ? F.money(c.bridge.pendingUsd) + ' · ' : '') + c.bridge.pendingCount + ' claims'}
                 />
                 <Metric
                   label={
@@ -301,7 +297,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
               <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--hairline)', color: C.com, fontSize: 11 }}>
                 {c.bridge.tvlUsd != null ? 'TVL = ' : 'bridged = '}
                 <span style={{ color: C.txt }}>{c.bridge.balanceNative != null ? F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || 'ETH') : '—'}</span>
-                {c.bridge.tvlUsd != null ? <>{' × '}<span style={{ color: C.txt }}>{F.price(c.bridge.priceUsd)}</span></> : null}
+                {c.bridge.tvlUsd != null ? <>{' × '}<span style={{ color: C.txt }}>{F.price(c.bridge.priceUsd)}</span>{' = '}<span style={{ color: C.num }}>{F.money(c.bridge.tvlUsd)}</span></> : null}
                 {' · '}
                 {c.gasToken ? (
                   <Tip w={320} label={<>This chain's native gas token is the ERC-20 <b style={{ color: '#fff' }}>{c.gasToken.symbol || c.gasToken.address}</b>{c.gasToken.name ? ' (' + c.gasToken.name + ')' : ''} locked in the bridge on {c.parent}. Bridged value is measured in this token (via balanceOf); USD shown only when a price feed exists for it.</>}>

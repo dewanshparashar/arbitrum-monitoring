@@ -386,8 +386,8 @@ export function Console() {
             <span style={col(146)}><Tip underline w={250} label={HEADERS.rpc}>rpc.uptime</Tip></span>
             <span style={col(78, 'right')}><Tip underline w={250} label={HEADERS.lat}>lat</Tip></span>
             <span style={col(70, 'right')}><Tip underline w={290} label={HEADERS.tps}>tps</Tip></span>
-            <span style={col(116, 'right')}><Tip underline w={280} label={HEADERS.tvl}>bridged tvl</Tip></span>
-            <span style={col(104, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending out</Tip></span>
+            <span style={col(160, 'right')}><Tip underline w={280} label={HEADERS.tvl}>bridged tvl</Tip></span>
+            <span style={col(140, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending out</Tip></span>
             <span style={col(74, 'right')}><Tip underline w={250} label={HEADERS.batch}>batch</Tip></span>
             <span style={col(66, 'right')}><Tip underline w={260} label={HEADERS.retry}>retry</Tip></span>
             <span style={col(46, 'right')}><Tip underline w={250} label={HEADERS.alert}>alert</Tip></span>
@@ -460,23 +460,15 @@ export function Console() {
                         <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}><LiveTps value={c.tps} /></span>
                       </Tip>}
                 </span>
-                <span style={{ ...col(116, 'right'), color: c.bridge.tvlUsd != null ? C.num : c.bridge.balanceNative != null ? C.flag : C.com }}>
-                  {c.bridge.tvlUsd != null
-                    ? F.money(c.bridge.tvlUsd)
-                    : c.bridge.balanceNative != null
-                      ? <Tip w={260} label={`Native bridged amount — no USD price feed for ${c.bridge.balanceAsset || c.native}, so the gas-token balance is shown instead of a dollar value.`}>
-                          <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>{F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || c.native)}</span>
-                        </Tip>
-                      : '—'}
+                <span style={{ ...col(160, 'right'), color: c.bridge.balanceNative != null ? (c.bridge.isCustomGasToken ? C.flag : C.num) : C.com }}>
+                  {c.bridge.balanceNative != null
+                    ? <>{F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || c.native)}{c.bridge.tvlUsd != null ? <span style={{ color: C.com }}> ({F.money(c.bridge.tvlUsd)})</span> : null}</>
+                    : '—'}
                 </span>
-                <span style={{ ...col(104, 'right'), color: c.bridge.pendingUsd != null ? C.txt : c.bridge.pendingNative ? C.flag : C.com }}>
-                  {c.bridge.pendingUsd != null
-                    ? F.money(c.bridge.pendingUsd)
-                    : c.bridge.pendingNative
-                      ? <Tip w={260} label={`Native pending-withdrawal amount — no USD price feed for ${c.native}, so the gas-token value is shown instead of a dollar value.`}>
-                          <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>{F.compact(c.bridge.pendingNative, c.native)}</span>
-                        </Tip>
-                      : '—'}
+                <span style={{ ...col(140, 'right'), color: c.bridge.pendingNative ? (c.bridge.isCustomGasToken ? C.flag : C.txt) : C.com }}>
+                  {c.bridge.pendingNative
+                    ? <>{F.compact(c.bridge.pendingNative, c.bridge.balanceAsset || c.native)}{c.bridge.pendingUsd != null ? <span style={{ color: C.com }}> ({F.money(c.bridge.pendingUsd)})</span> : null}</>
+                    : '—'}
                 </span>
                 <span style={{ ...col(74, 'right'), color: c.batch.lastMins != null && c.batch.lastMins > c.batch.targetMins * 2 ? C.crit : C.com }}>
                   {F.dur(c.batch.lastMins)}
