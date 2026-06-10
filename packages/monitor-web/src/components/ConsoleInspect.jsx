@@ -267,9 +267,17 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 {' × '}
                 <span style={{ color: C.txt }}>{c.bridge.priceUsd != null ? F.price(c.bridge.priceUsd) : '—'}</span>
                 {' · '}
-                <Tip w={280} label="Only the canonical ETH bridge balance is priced. Per-token (ERC-20) bridged value and custom gas-token TVL are not indexed yet.">
-                  <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>ERC-20 / gas-token TVL not indexed</span>
-                </Tip>
+                {c.gasToken ? (
+                  <Tip w={300} label={<>This chain's native gas token is the ERC-20 <b style={{ color: '#fff' }}>{c.gasToken.symbol || c.gasToken.address}</b>{c.gasToken.name ? ' (' + c.gasToken.name + ')' : ''} locked in the bridge on {c.parent}. Bridged value is currently measured as ETH only; native-token TVL is being wired up.</>}>
+                    <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)', color: C.flag }}>
+                      gas token: {c.gasToken.symbol || (c.gasToken.address.slice(0, 8) + '…')}
+                    </span>
+                  </Tip>
+                ) : (
+                  <Tip w={280} label="This chain uses ETH as its native gas token, so the canonical bridge balance is ETH and the TVL above is correct.">
+                    <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>gas token: ETH</span>
+                  </Tip>
+                )}
               </div>
             </Panel>
 
@@ -485,7 +493,9 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 <KV k="rollup" v={<Ext chainId={c.parentChainId} hash={contracts.rollup} kind="addr" tip="Rollup contract">{contracts.rollup ? contracts.rollup.slice(0, 8) + '…' + contracts.rollup.slice(-4) : null}</Ext>} />
                 <KV k="sequencerInbox" v={<Ext chainId={c.parentChainId} hash={contracts.sequencerInbox} kind="addr" tip="SequencerInbox contract">{contracts.sequencerInbox ? contracts.sequencerInbox.slice(0, 8) + '…' + contracts.sequencerInbox.slice(-4) : null}</Ext>} />
                 <KV k="bridge" v={<Ext chainId={c.parentChainId} hash={contracts.bridge} kind="addr" tip="Bridge contract">{contracts.bridge ? contracts.bridge.slice(0, 8) + '…' + contracts.bridge.slice(-4) : null}</Ext>} />
-                <KV k={<Tip underline label="inbox / outbox / batchPoster addresses aren't in the indexed portal snapshot yet.">inbox · outbox · poster</Tip>} v={<Gap what="not in portal snapshot" />} />
+                <KV k="inbox" v={contracts.inbox ? <Ext chainId={c.parentChainId} hash={contracts.inbox} kind="addr" tip="Inbox contract">{contracts.inbox.slice(0, 8) + '…' + contracts.inbox.slice(-4)}</Ext> : <Gap what="not in portal snapshot" />} />
+                <KV k="outbox" v={contracts.outbox ? <Ext chainId={c.parentChainId} hash={contracts.outbox} kind="addr" tip="Outbox contract">{contracts.outbox.slice(0, 8) + '…' + contracts.outbox.slice(-4)}</Ext> : <Gap what="not in portal snapshot" />} />
+                <KV k={<Tip underline label="The batch-poster EOA isn't a portal config field — it's derived from the sender of recent batch transactions, which isn't surfaced yet.">batchPoster</Tip>} v={<Gap what="batch-poster EOA not derived yet" />} />
               </div>
             </Panel>
           </div>

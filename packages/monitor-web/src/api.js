@@ -362,7 +362,16 @@ export const fetchChainDetail = async chainId => {
       rollup: bridge.rollup || null,
       sequencerInbox: bridge.sequencerInbox || null,
       bridge: bridge.bridge || null,
+      inbox: bridge.inbox || null,
+      outbox: bridge.outbox || null,
     },
+    gasToken: snapshot.nativeToken
+      ? {
+          address: snapshot.nativeToken,
+          symbol: snapshot.nativeTokenSymbol || null,
+          name: snapshot.nativeTokenName || null,
+        }
+      : null,
     confirmPeriodBlocks: snapshot.confirmPeriodBlocks ?? null,
     rpcHistory,
     rpcSpanStart: spanStart,

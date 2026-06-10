@@ -45,25 +45,45 @@ if (!classicNodeCreatedEvent || !boldAssertionCreatedEvent) {
 const classicNodeCreatedSelector = toEventSelector(classicNodeCreatedEvent)
 const boldAssertionCreatedSelector = toEventSelector(boldAssertionCreatedEvent)
 
-const pickChain = chain => ({
-  chainId: chain.chainId,
-  name: chain.name,
-  slug: chain.slug,
-  parentChainId: chain.parentChainId,
-  confirmPeriodBlocks: chain.confirmPeriodBlocks,
-  rpcUrl: chain.rpcUrl,
-  explorerUrl: chain.explorerUrl,
-  ethBridge: {
-    bridge: chain.ethBridge.bridge,
-    rollup: chain.ethBridge.rollup,
-    sequencerInbox: chain.ethBridge.sequencerInbox,
-  },
-  bridgeUiConfig: {
-    assertionIntervalSeconds:
-      chain.bridgeUiConfig?.assertionIntervalSeconds ?? null,
-    fastWithdrawalTime: chain.bridgeUiConfig?.fastWithdrawalTime ?? null,
-  },
-})
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+const pickChain = chain => {
+  const nativeToken = chain.nativeToken
+  const hasCustomGasToken =
+    typeof nativeToken === 'string' &&
+    nativeToken.toLowerCase() !== ZERO_ADDRESS
+  const nativeTokenData = chain.bridgeUiConfig?.nativeTokenData ?? {}
+
+  return {
+    chainId: chain.chainId,
+    name: chain.name,
+    slug: chain.slug,
+    parentChainId: chain.parentChainId,
+    confirmPeriodBlocks: chain.confirmPeriodBlocks,
+    rpcUrl: chain.rpcUrl,
+    explorerUrl: chain.explorerUrl,
+    ethBridge: {
+      bridge: chain.ethBridge.bridge,
+      rollup: chain.ethBridge.rollup,
+      sequencerInbox: chain.ethBridge.sequencerInbox,
+      inbox: chain.ethBridge.inbox ?? null,
+      outbox: chain.ethBridge.outbox ?? null,
+    },
+    // Custom gas token (parent-chain ERC-20) when set; ETH chains omit it.
+    ...(hasCustomGasToken
+      ? {
+          nativeToken,
+          nativeTokenSymbol: nativeTokenData.symbol ?? null,
+          nativeTokenName: nativeTokenData.name ?? null,
+        }
+      : {}),
+    bridgeUiConfig: {
+      assertionIntervalSeconds:
+        chain.bridgeUiConfig?.assertionIntervalSeconds ?? null,
+      fastWithdrawalTime: chain.bridgeUiConfig?.fastWithdrawalTime ?? null,
+    },
+  }
+}
 
 const getLatestBlockNumber = async (rpcUrl, chainId) => {
   const response = await fetch(rpcUrl, {

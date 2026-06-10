@@ -10,7 +10,13 @@ export type PortalMainnetChain = {
     bridge: string
     rollup: string
     sequencerInbox: string
+    inbox?: string | null
+    outbox?: string | null
   }
+  // Custom gas token (parent-chain ERC-20). Absent on ETH-native chains.
+  nativeToken?: string
+  nativeTokenSymbol?: string | null
+  nativeTokenName?: string | null
 }
 
 type PortalSnapshot = {
