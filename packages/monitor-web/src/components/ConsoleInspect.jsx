@@ -9,6 +9,7 @@ import React from 'react'
 import * as F from '../fmt.js'
 import { full, relative, absolute } from '../time.js'
 import { fetchChainDetail, synthesizeAlerts, registerExplorersFromDetail } from '../api.js'
+import { whyBatch, whyAssertion, whyRetryable, whyRpc } from '../explainers.jsx'
 import { ChainLogo, UptimeBars } from './viz.jsx'
 import { Tip, Ext } from './tooltip.jsx'
 
@@ -305,7 +306,7 @@ export function ConsoleInspect({ chain, onClose }) {
                     color={c.rpc.latency == null ? C.com : c.rpc.latency > 350 ? C.warn : C.str}
                   />
                   <Metric
-                    label="Status"
+                    label={<Tip underline w={300} label={whyRpc(c)}>Status</Tip>}
                     value={c.rpc.status === 'ok' ? 'reachable' : c.rpc.status === 'warn' ? 'degraded' : c.rpc.status === 'crit' ? 'unreachable' : 'unknown'}
                     color={stColor[c.rpc.status]}
                   />
@@ -326,7 +327,13 @@ export function ConsoleInspect({ chain, onClose }) {
             <Panel
               title="batch.poster"
               accent={stColor[batchSt]}
-              right={<span style={{ color: stColor[batchSt], fontSize: 11.5 }}>{batchSt === 'ok' ? 'healthy' : batchSt === 'warn' ? 'watch' : batchSt === 'crit' ? 'stalled' : 'unknown'}</span>}
+              right={
+                <Tip w={300} label={whyBatch(c)}>
+                  <span style={{ color: stColor[batchSt], fontSize: 11.5, borderBottom: '1px dotted ' + stColor[batchSt] + '66' }}>
+                    {batchSt === 'ok' ? 'healthy' : batchSt === 'warn' ? 'watch' : batchSt === 'crit' ? 'stalled' : 'unknown'}
+                  </span>
+                </Tip>
+              }
             >
               <KV
                 k="last batch"
@@ -363,7 +370,13 @@ export function ConsoleInspect({ chain, onClose }) {
             <Panel
               title="assertion.health"
               accent={stColor[assertSt]}
-              right={<span style={{ color: stColor[assertSt], fontSize: 11.5 }}>{c.assertion.stuck ? 'stuck' : assertSt === 'idle' ? 'unknown' : 'progressing'}</span>}
+              right={
+                <Tip w={300} label={whyAssertion(c)}>
+                  <span style={{ color: stColor[assertSt], fontSize: 11.5, borderBottom: '1px dotted ' + stColor[assertSt] + '66' }}>
+                    {c.assertion.stuck ? 'stuck' : assertSt === 'idle' ? 'unknown' : 'progressing'}
+                  </span>
+                </Tip>
+              }
             >
               <KV
                 k="last assertion"
@@ -397,7 +410,13 @@ export function ConsoleInspect({ chain, onClose }) {
               title="retryable.tickets"
               accent={C.com}
               span={2}
-              right={<span style={{ fontSize: 11.5, color: C.com }}>{c.retry.open} open · <span style={{ color: c.retry.expired ? C.crit : C.com }}>{c.retry.expired} expired</span></span>}
+              right={
+                <Tip w={300} label={whyRetryable(c)}>
+                  <span style={{ fontSize: 11.5, color: C.com, borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>
+                    {c.retry.open} open · <span style={{ color: c.retry.expired ? C.crit : C.com }}>{c.retry.expired} expired</span>
+                  </span>
+                </Tip>
+              }
             >
               <div style={{ display: 'flex', gap: 18, marginBottom: 12 }}>
                 <Metric label={<Tip underline label="Retryable tickets created but not confirmed redeemed in the window.">Open</Tip>} value={c.retry.open} color={C.txt} />

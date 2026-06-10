@@ -9,6 +9,7 @@ import { full, relative, absolute } from '../time.js'
 import { fetchFleet } from '../api.js'
 import { Tip } from './tooltip.jsx'
 import { ConsoleInspect } from './ConsoleInspect.jsx'
+import { Legend, HEADERS, whyOverall } from '../explainers.jsx'
 
 const C = {
   kw: '#C792EA',
@@ -38,6 +39,7 @@ export function Console() {
   const [error, setError] = React.useState(null)
   const [cursor, setCursor] = React.useState(true)
   const [selected, setSelected] = React.useState(null)
+  const [showLegend, setShowLegend] = React.useState(false)
 
   React.useEffect(() => {
     const t = setInterval(() => setCursor(c => !c), 530)
@@ -117,6 +119,13 @@ export function Console() {
         <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.02em' }}>
           arb-monitor — fleet watch — zsh — 142×48
         </span>
+        <button
+          onClick={() => setShowLegend(true)}
+          title="How are these insights derived?"
+          style={{ background: 'none', border: '1px solid var(--hairline-2)', color: 'var(--text-3)', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'var(--mono)', marginRight: 10 }}
+        >
+          ? explain
+        </button>
         <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>fsn1 ● live</span>
       </div>
 
@@ -162,19 +171,19 @@ export function Console() {
           {/* table header */}
           <div style={{ color: C.com, borderBottom: '1px solid var(--hairline)', paddingBottom: 4, ...rowNoWrap }}>
             <Gutter n="#" />
-            <span style={col(150)}><Tip underline label="The Orbit / Arbitrum chain being monitored. Click any row to inspect it.">chain</Tip></span>
-            <span style={col(118)}><Tip underline label="The settlement (parent) chain this chain posts its batches and assertions to.">parent</Tip></span>
-            <span style={col(96)}><Tip underline label="Rollup posts tx data on-chain; AnyTrust uses a Data Availability Committee. +bold = BoLD permissionless dispute protocol.">type</Tip></span>
+            <span style={col(150)}><Tip underline w={250} label={HEADERS.chain}>chain</Tip></span>
+            <span style={col(118)}><Tip underline w={250} label={HEADERS.parent}>parent</Tip></span>
+            <span style={col(96)}><Tip underline w={280} label={HEADERS.type}>type</Tip></span>
             <span style={col(56, 'center')}>
-              <Tip underline w={260} label={<span><b>Monitor triad</b> — from the alert decision tree.<br /><b style={{ color: '#82AAFF' }}>R</b> Retryable · cross-chain message health<br /><b style={{ color: '#82AAFF' }}>B</b> Batch poster · sequencer posting<br /><b style={{ color: '#82AAFF' }}>A</b> Assertion · validator / confirmation health</span>}>r b a</Tip>
+              <Tip underline w={290} label={<span><b style={{ color: '#fff' }}>Monitor triad</b> — the alert decision tree.<br /><b style={{ color: '#82AAFF' }}>R</b> Retryable · cross-chain message health<br /><b style={{ color: '#82AAFF' }}>B</b> Batch poster · sequencer posting &amp; cadence<br /><b style={{ color: '#82AAFF' }}>A</b> Assertion · validator / confirmation health<br /><span style={{ color: 'var(--text-3)' }}>Hover a row's dots for that chain's verdict · click <b>? explain</b> for full rules.</span></span>}>r b a</Tip>
             </span>
-            <span style={col(146)}><Tip underline w={250} label="RPC reachability over the indexer window. Bars reflect current uptime; per-probe history is in the inspector.">rpc.uptime</Tip></span>
-            <span style={col(78, 'right')}><Tip underline label="Latest successful RPC probe latency from the worker.">lat</Tip></span>
-            <span style={col(78, 'right')}><Tip underline label="Value bridged into the chain (native-token balance × price), in USD.">tvl</Tip></span>
-            <span style={col(82, 'right')}><Tip underline label="Funds in outbound withdrawals not yet claimed on the parent chain.">pending</Tip></span>
-            <span style={col(74, 'right')}><Tip underline label="Time since the sequencer last posted a batch to the parent chain.">batch</Tip></span>
-            <span style={col(66, 'right')}><Tip underline label="Open retryable tickets · the trailing number flags urgent (expiring/expired) ones.">retry</Tip></span>
-            <span style={col(46, 'right')}><Tip underline label="Active firing monitors for this chain (R/B/A).">alert</Tip></span>
+            <span style={col(146)}><Tip underline w={250} label={HEADERS.rpc}>rpc.uptime</Tip></span>
+            <span style={col(78, 'right')}><Tip underline w={250} label={HEADERS.lat}>lat</Tip></span>
+            <span style={col(78, 'right')}><Tip underline w={280} label={HEADERS.tvl}>tvl</Tip></span>
+            <span style={col(82, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending</Tip></span>
+            <span style={col(74, 'right')}><Tip underline w={250} label={HEADERS.batch}>batch</Tip></span>
+            <span style={col(66, 'right')}><Tip underline w={260} label={HEADERS.retry}>retry</Tip></span>
+            <span style={col(46, 'right')}><Tip underline w={250} label={HEADERS.alert}>alert</Tip></span>
           </div>
 
           {/* rows */}
@@ -192,7 +201,7 @@ export function Console() {
               >
                 <Gutter n={ln} />
                 <span style={col(150)}>
-                  <Tip label={c.health === 'crit' ? 'Outage — one or more monitors critical' : c.health === 'warn' ? 'Degraded — a monitor needs attention' : c.health === 'idle' ? 'Unknown — insufficient indexed data' : 'Operational — all monitors healthy'}>
+                  <Tip w={280} label={whyOverall(c)}>
                     <span style={{ color: stColor[c.health], marginRight: 7 }}>{glyph[c.health]}</span>
                   </Tip>
                   <span style={{ color: c.color }}>{c.id.length > 16 ? c.id.slice(0, 15) + '…' : c.id}</span>
@@ -267,6 +276,7 @@ export function Console() {
       </div>
 
       {selected && <ConsoleInspect chain={selected} onClose={() => setSelected(null)} />}
+      {showLegend && <Legend onClose={() => setShowLegend(false)} />}
     </div>
   )
 }

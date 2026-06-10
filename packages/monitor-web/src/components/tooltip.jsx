@@ -7,18 +7,58 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { expl } from '../fmt.js'
 
+// close delay so the pointer can travel from the trigger into the tooltip
+const CLOSE_DELAY_MS = 220
+
 export function Tip({ label, children, w = 240, underline = false, block = false, style }) {
   const [show, setShow] = React.useState(false)
   const [pos, setPos] = React.useState({ x: 0, y: 0, above: true })
   const ref = React.useRef(null)
+  const closeTimer = React.useRef(null)
 
   const place = () => {
     if (!ref.current) return
     const r = ref.current.getBoundingClientRect()
-    const above = r.top > 120
+    const above = r.top > 140
     setPos({ x: r.left + r.width / 2, y: above ? r.top - 9 : r.bottom + 9, above })
     setShow(true)
   }
+
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }
+  const open = () => {
+    cancelClose()
+    place()
+  }
+  const scheduleClose = () => {
+    cancelClose()
+    closeTimer.current = setTimeout(() => setShow(false), CLOSE_DELAY_MS)
+  }
+  const closeNow = () => {
+    cancelClose()
+    setShow(false)
+  }
+
+  // dismiss on scroll / Escape while open (fixed-position tip would otherwise detach)
+  React.useEffect(() => {
+    if (!show) return undefined
+    const onScroll = () => closeNow()
+    const onKey = e => {
+      if (e.key === 'Escape') closeNow()
+    }
+    window.addEventListener('scroll', onScroll, true)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('scroll', onScroll, true)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [show])
+
+  React.useEffect(() => () => cancelClose(), [])
 
   const wrapStyle = {
     display: block ? 'block' : 'inline',
@@ -28,11 +68,13 @@ export function Tip({ label, children, w = 240, underline = false, block = false
   }
 
   return (
-    <span ref={ref} onMouseEnter={place} onMouseLeave={() => setShow(false)} style={wrapStyle}>
+    <span ref={ref} onMouseEnter={open} onMouseLeave={scheduleClose} style={wrapStyle}>
       {children}
       {show &&
         createPortal(
           <div
+            onMouseEnter={cancelClose}
+            onMouseLeave={scheduleClose}
             style={{
               position: 'fixed',
               left: pos.x,
@@ -40,7 +82,7 @@ export function Tip({ label, children, w = 240, underline = false, block = false
               transform: `translate(-50%, ${pos.above ? '-100%' : '0'})`,
               maxWidth: w,
               zIndex: 9999,
-              pointerEvents: 'none',
+              pointerEvents: 'auto',
               background: '#0E121B',
               border: '1px solid var(--hairline-2)',
               borderRadius: 8,
@@ -53,6 +95,16 @@ export function Tip({ label, children, w = 240, underline = false, block = false
               animation: 'tipIn .12s ease',
             }}
           >
+            {/* invisible bridge over the 9px gap so moving to the tip doesn't close it */}
+            <span
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                [pos.above ? 'bottom' : 'top']: -10,
+                height: 10,
+              }}
+            />
             {label}
             <span
               style={{
