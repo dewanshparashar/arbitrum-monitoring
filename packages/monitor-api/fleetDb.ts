@@ -78,7 +78,7 @@ type ChainRuntimeRow = {
   base_stake_wei: string | null
   validator_whitelist_disabled: boolean | null
   child_head_block: string | null
-  checked_at: number | null
+  checked_at_epoch: number | null
 }
 
 type BalanceSummaryRow = {
@@ -615,19 +615,11 @@ export class FleetDb {
           where executed_at is null
           group by chain_id
         `),
+        // select * so the API never hard-depends on a specific column existing
+        // — a newer column (e.g. tps) missing because the worker hasn't
+        // redeployed must NOT drop the columns that do exist (arbos, etc.).
         this.queryOptional<ChainRuntimeRow>(`
-          select
-            chain_id,
-            arbos_raw,
-            arbos_version,
-            arbos_name,
-            batch_poster,
-            tps,
-            poster_balance_wei::text as poster_balance_wei,
-            base_stake_wei::text as base_stake_wei,
-            validator_whitelist_disabled,
-            child_head_block::text as child_head_block,
-            cast(extract(epoch from checked_at) as bigint) as checked_at
+          select *, cast(extract(epoch from checked_at) as bigint) as checked_at_epoch
           from ${this.chainRuntimeTable}
         `),
         // coarse per-chain probe history for the table sparkline — each chain's
@@ -786,7 +778,7 @@ export class FleetDb {
             runtime?.child_head_block != null && batch?.max_block_number != null
               ? Math.max(0, Number(runtime.child_head_block) - Number(batch.max_block_number))
               : null,
-          runtimeCheckedAt: runtime?.checked_at ?? null,
+          runtimeCheckedAt: runtime?.checked_at_epoch ?? null,
           alerts: countAlerts(retryableStatus, batchStatus, assertionStatus),
         }
       })
