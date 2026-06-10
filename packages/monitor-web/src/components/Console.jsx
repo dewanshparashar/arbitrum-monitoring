@@ -233,8 +233,15 @@ export function Console() {
     return () => clearInterval(s)
   }, [splashing])
 
+  // Sort: busiest first (TPS), then bridged TVL, then surface unhealthy chains,
+  // then name. Chains with no TPS sample (null) sink below measured-zero ones.
+  const tpsKey = c => (typeof c.tps === 'number' ? c.tps : -1)
   const sorted = [...chains].sort(
-    (a, b) => order[a.health] - order[b.health] || (b.bridge.tvlUsd || 0) - (a.bridge.tvlUsd || 0)
+    (a, b) =>
+      tpsKey(b) - tpsKey(a) ||
+      (b.bridge.tvlUsd || 0) - (a.bridge.tvlUsd || 0) ||
+      order[a.health] - order[b.health] ||
+      a.name.localeCompare(b.name)
   )
 
   // fleet rollups derived from the per-chain overall health (matches glyphs)
