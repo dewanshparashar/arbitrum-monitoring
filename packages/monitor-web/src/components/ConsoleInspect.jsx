@@ -473,7 +473,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', fontSize: 11.5 }}>
                       <span style={{ color: stColor[t.stKind] || C.num }}>●</span>
                       <span style={{ width: 150 }}>
-                        <Ext chainId={c.chainId} hash={t.hash} tip="View the creating transaction on the explorer">
+                        <Ext chainId={c.parentChainId} hash={t.hash} tip="View the retryable's creating transaction on the parent chain">
                           {t.hash ? t.hash.slice(0, 10) + '…' + t.hash.slice(-6) : `msg #${t.messageIndex}`}
                         </Ext>
                       </span>
@@ -497,7 +497,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                   const txMap = {
                     batch: { cid: c.parentChainId, h: batchTx, label: 'batch tx' },
                     assertion: { cid: c.parentChainId, h: assertionTx, label: 'assertion tx' },
-                    retryable: { cid: c.chainId, h: detail?.tickets?.[0]?.hash, label: 'ticket' },
+                    retryable: { cid: c.parentChainId, h: detail?.tickets?.[0]?.hash, label: 'ticket' },
                   }
                   const tx = txMap[a.monitor]
                   return (
