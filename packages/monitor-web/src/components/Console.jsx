@@ -126,6 +126,67 @@ const LiveTps = React.memo(function LiveTps({ value }) {
   return '~' + fmtTps(shown)
 })
 
+const PARENT_ABBR = { Ethereum: 'eth', Base: 'base', 'Arbitrum One': 'arb' }
+
+// Compact indexer/worker freshness for the bottom status bar (white-on-blue).
+const IndexStatus = React.memo(function IndexStatus({ statusInfo }) {
+  const parents = statusInfo?.indexer?.parents
+  const worker = statusInfo?.worker
+  return (
+    <span style={{ padding: '0 12px', background: 'rgba(0,0,0,0.18)', height: '100%', display: 'flex', alignItems: 'center', gap: 11 }}>
+      <Tip w={320} label={whyIndexing(statusInfo)}>
+        <span style={{ opacity: 0.85, borderBottom: '1px dotted rgba(255,255,255,0.4)' }}>index</span>
+      </Tip>
+      {parents?.length ? (
+        parents.map(p => {
+          const abbr = PARENT_ABBR[p.parentChainName] || p.parentChainName.toLowerCase().replace(/\s+/g, '-')
+          const stale = !(p.lagSeconds != null && p.lagSeconds < 600)
+          const behind =
+            p.behindBlocks == null ? null : p.behindBlocks === 0 ? 'head' : F.compact(p.behindBlocks)
+          return (
+            <Tip
+              key={p.parentChainId}
+              w={300}
+              label={
+                <span>
+                  <b style={{ color: '#fff' }}>{p.parentChainName}</b>
+                  <br />
+                  indexed block <b style={{ color: '#fff' }}>{F.num(p.indexedBlock)}</b>
+                  <br />
+                  chain head <b style={{ color: '#fff' }}>{F.num(p.headBlock)}</b>
+                  {p.headCheckedAt ? <span style={{ color: 'var(--text-3)' }}> (read {relative(p.headCheckedAt)})</span> : null}
+                  <br />
+                  <span style={{ color: p.behindBlocks > 2000 ? '#F5B544' : '#3DD68C' }}>
+                    {p.behindBlocks == null ? 'lag unavailable' : p.behindBlocks === 0 ? 'at head' : `~${F.compact(p.behindBlocks)} blocks behind`}
+                  </span>
+                  <br />
+                  <span style={{ color: 'var(--text-3)' }}>latest event {p.latestEventAt ? relative(p.latestEventAt) : '—'}</span>
+                </span>
+              }
+            >
+              <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.3)', color: stale ? '#FFD27A' : '#fff' }}>
+                {abbr} {p.latestEventAt ? relative(p.latestEventAt) : '—'}
+                {behind ? <span style={{ opacity: 0.85 }}> ·{behind === 'head' ? ' head' : ' ' + behind}</span> : null}
+              </span>
+            </Tip>
+          )
+        })
+      ) : (
+        <span style={{ opacity: 0.7 }}>freshness unavailable</span>
+      )}
+      <span style={{ opacity: 0.45 }}>·</span>
+      <span style={{ opacity: 0.85 }}>worker</span>
+      {worker ? (
+        <span style={{ color: worker.status === 'ok' ? '#B8F5D6' : '#FFB4BC' }}>
+          {worker.status === 'ok' ? '✓' : '✖'} {worker.stateUpdatedAt ? relative(worker.stateUpdatedAt) : '—'}
+        </span>
+      ) : (
+        <span style={{ opacity: 0.7 }}>pending</span>
+      )}
+    </span>
+  )
+})
+
 export function Console() {
   // SWR: poll the fleet every POLL_MS, revalidate on window focus, and keep the
   // previous data visible while refetching (no flicker / no splash on refresh).
@@ -271,49 +332,10 @@ export function Console() {
                   <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
                 </div>
                 <div style={{ color: C.com }}>
-                  → <Tip w={320} label={whyIndexing(statusInfo)}><span style={{ borderBottom: '1px dotted rgba(255,255,255,0.2)' }}>index.status</span></Tip>:{' '}
-                  {statusInfo?.indexer?.parents?.length ? (
-                    statusInfo.indexer.parents.map((p, i) => (
-                      <span key={p.parentChainId}>
-                        {i ? ' · ' : ''}
-                        <span style={{ color: C.fn }}>{p.parentChainName.toLowerCase().replace(/\s+/g, '-')}</span>{' '}
-                        <span style={{ color: p.lagSeconds != null && p.lagSeconds < 600 ? C.str : C.warn }}>{p.latestEventAt ? relative(p.latestEventAt) : '—'}</span>
-                        {p.behindBlocks != null && p.headBlock != null ? (
-                          <Tip
-                            w={300}
-                            label={
-                              <span>
-                                indexed block <b style={{ color: '#fff' }}>{F.num(p.indexedBlock)}</b>
-                                <br />
-                                chain head <b style={{ color: '#fff' }}>{F.num(p.headBlock)}</b>
-                                {p.headCheckedAt ? <span style={{ color: 'var(--text-3)' }}> (read {relative(p.headCheckedAt)})</span> : null}
-                                <br />
-                                <span style={{ color: p.behindBlocks > 2000 ? '#F5B544' : '#3DD68C' }}>
-                                  {p.behindBlocks === 0 ? 'at head' : `~${F.compact(p.behindBlocks)} blocks behind`}
-                                </span>
-                                <br />
-                                <span style={{ color: 'var(--text-4)', fontSize: 11 }}>indexed = newest indexed event block (lower bound on the cursor)</span>
-                              </span>
-                            }
-                          >
-                            <span style={{ color: p.behindBlocks > 2000 ? C.warn : C.com, borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>
-                              {' '}{p.behindBlocks === 0 ? '(at head)' : `(${F.compact(p.behindBlocks)} blk behind)`}
-                            </span>
-                          </Tip>
-                        ) : null}
-                      </span>
-                    ))
-                  ) : (
-                    <span style={{ color: C.com }}>indexer freshness unavailable</span>
-                  )}
-                  {' · worker '}
-                  {statusInfo?.worker ? (
-                    <span style={{ color: statusInfo.worker.status === 'ok' ? C.str : C.crit }}>
-                      {statusInfo.worker.status === 'ok' ? '✓' : '✖'} {statusInfo.worker.stateUpdatedAt ? relative(statusInfo.worker.stateUpdatedAt) : '—'}
-                    </span>
-                  ) : (
-                    <span style={{ color: C.com }}>pending</span>
-                  )}
+                  → indexer + worker freshness pinned in the status bar below{' '}
+                  <Tip w={320} label={whyIndexing(statusInfo)}>
+                    <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.2)' }}>↓</span>
+                  </Tip>
                 </div>
               </>
             )}
@@ -468,9 +490,7 @@ export function Console() {
         <span style={{ padding: '0 11px', opacity: 0.92 }}>TVL {F.money(fleet.tvlUsd)}</span>
         <span style={{ padding: '0 11px', opacity: 0.92 }}>pending {F.money(fleet.pendingUsd)}</span>
         <span style={{ padding: '0 11px', opacity: 0.92 }}>retryables {fleet.openRetryables}</span>
-        <span style={{ padding: '0 13px', background: 'rgba(0,0,0,0.18)', height: '100%', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ opacity: 0.8 }}>indexer</span> fsn1 ● live
-        </span>
+        <IndexStatus statusInfo={statusInfo} />
       </div>
 
       {selected && <ConsoleInspect chain={selected} onClose={closeInspect} />}
