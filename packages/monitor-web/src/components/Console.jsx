@@ -5,6 +5,7 @@
 
 import React from 'react'
 import * as F from '../fmt.js'
+import { full, relative, absolute } from '../time.js'
 import { fetchFleet } from '../api.js'
 import { Tip } from './tooltip.jsx'
 import { ConsoleInspect } from './ConsoleInspect.jsx'
@@ -32,6 +33,7 @@ const heartbeatChar = v =>
 export function Console() {
   const [chains, setChains] = React.useState([])
   const [overview, setOverview] = React.useState(null)
+  const [fetchedAt, setFetchedAt] = React.useState(null)
   const [status, setStatus] = React.useState('loading')
   const [error, setError] = React.useState(null)
   const [cursor, setCursor] = React.useState(true)
@@ -46,10 +48,11 @@ export function Console() {
     let live = true
     const load = async () => {
       try {
-        const { overview, chains } = await fetchFleet()
+        const { overview, chains, fetchedAt } = await fetchFleet()
         if (!live) return
         setOverview(overview)
         setChains(chains)
+        setFetchedAt(fetchedAt)
         setStatus('ok')
         setError(null)
       } catch (e) {
@@ -146,8 +149,9 @@ export function Console() {
                   {status === 'ok' ? <span style={{ color: C.str }}>ok</span> : <span style={{ color: C.warn }}>…</span>}
                 </div>
                 <div style={{ color: C.com }}>
-                  → last sync{' '}
-                  <span style={{ color: C.num }}>{overview?.generatedAt ? F.ago(Math.floor(new Date(overview.generatedAt).getTime() / 1000)) : '—'}</span> ·{' '}
+                  → last probe{' '}
+                  <Tip label={full(overview?.lastRpcCheckAt)}><span style={{ color: C.num }}>{overview?.lastRpcCheckAt ? relative(overview.lastRpcCheckAt) : '—'}</span></Tip> ·{' '}
+                  fetched <Tip label={full(fetchedAt)}><span style={{ color: C.num }}>{fetchedAt ? relative(fetchedAt) : '—'}</span></Tip> ·{' '}
                   <span style={{ color: C.str }}>{fleet.ok} ok</span> <span style={{ color: C.warn }}>{fleet.warn} warn</span>{' '}
                   <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
                 </div>

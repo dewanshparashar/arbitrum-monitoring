@@ -7,7 +7,7 @@ import React from 'react'
 import { createPortal } from 'react-dom'
 import { expl } from '../fmt.js'
 
-export function Tip({ label, children, w = 240, underline = false, block = false }) {
+export function Tip({ label, children, w = 240, underline = false, block = false, style }) {
   const [show, setShow] = React.useState(false)
   const [pos, setPos] = React.useState({ x: 0, y: 0, above: true })
   const ref = React.useRef(null)
@@ -24,6 +24,7 @@ export function Tip({ label, children, w = 240, underline = false, block = false
     display: block ? 'block' : 'inline',
     cursor: 'help',
     ...(underline ? { borderBottom: '1px dotted rgba(255,255,255,0.28)' } : {}),
+    ...style,
   }
 
   return (

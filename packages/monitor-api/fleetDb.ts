@@ -66,11 +66,14 @@ type BalanceSummaryRow = {
   asset_key: string
   balance_wei: string
   previous_balance_wei: string | null
+  block_number: string | null
+  checked_at: number | null
 }
 
 type PriceRow = {
   asset_key: string
   price_usd: string
+  checked_at: number | null
 }
 
 type PendingExitSummaryRow = {
@@ -106,12 +109,21 @@ type FleetChain = {
   lastRpcCheckedAt: number | null
   latencyMs: number | null
   nativeAssetKey: string | null
+  nativeBalanceWei: string | null
+  balanceBlockNumber: string | null
+  balanceCheckedAt: number | null
+  priceUsd: number | null
+  priceAsset: string | null
+  priceSource: string | null
+  priceCheckedAt: number | null
   bridgedTvlUsd: number | null
   bridgedAmount24hUsd: number | null
   pendingOutUsd: number | null
   pendingOutCount: number
   alerts: number
 }
+
+const PRICE_SOURCE = 'coingecko'
 
 const parentChainNames: Record<number, string> = {
   1: 'Ethereum',
@@ -303,8 +315,17 @@ export class FleetDb {
   async readFleetOverview() {
     const chains = await this.readFleetChains()
 
+    const lastRpcCheckAt = chains.reduce<number | null>(
+      (max, chain) =>
+        chain.lastRpcCheckedAt != null && (max === null || chain.lastRpcCheckedAt > max)
+          ? chain.lastRpcCheckedAt
+          : max,
+      null
+    )
+
     return {
       generatedAt: loadPortalSnapshot().generatedAt,
+      lastRpcCheckAt,
       chains: chains.length,
       statuses: {
         healthy: chains.filter(chain => chain.alerts === 0).length,
@@ -400,7 +421,9 @@ export class FleetDb {
             select distinct on (chain_id)
               chain_id,
               asset_key,
-              balance_wei
+              balance_wei,
+              block_number,
+              checked_at
             from ${this.balanceSnapshotsTable}
             order by chain_id, checked_at desc, id desc
           ),
@@ -416,6 +439,8 @@ export class FleetDb {
             latest.chain_id,
             latest.asset_key,
             latest.balance_wei::text,
+            latest.block_number::text as block_number,
+            cast(extract(epoch from latest.checked_at) as bigint) as checked_at,
             previous.balance_wei::text as previous_balance_wei
           from latest
           left join previous on previous.chain_id = latest.chain_id
@@ -423,7 +448,8 @@ export class FleetDb {
         this.queryOptional<PriceRow>(`
           select distinct on (asset_key)
             asset_key,
-            price_usd::text
+            price_usd::text,
+            cast(extract(epoch from checked_at) as bigint) as checked_at
           from ${this.pricesTable}
           order by asset_key, checked_at desc, id desc
         `),
@@ -454,9 +480,8 @@ export class FleetDb {
         const rpc = rpcByChainId.get(chain.chainId)
         const balance = balanceByChainId.get(chain.chainId)
         const exit = exitByChainId.get(chain.chainId)
-        const priceUsd = balance
-          ? Number(priceByAssetKey.get(balance.asset_key)?.price_usd ?? NaN)
-          : NaN
+        const priceRow = balance ? priceByAssetKey.get(balance.asset_key) : undefined
+        const priceUsd = priceRow ? Number(priceRow.price_usd) : NaN
         const resolvedPriceUsd = Number.isFinite(priceUsd) ? priceUsd : null
 
         const batchStatus = getBatchStatus({
@@ -516,6 +541,13 @@ export class FleetDb {
           lastRpcCheckedAt: rpc?.last_checked_at ?? null,
           latencyMs: rpc?.latency_ms ?? null,
           nativeAssetKey: balance?.asset_key ?? null,
+          nativeBalanceWei: balance?.balance_wei ?? null,
+          balanceBlockNumber: balance?.block_number ?? null,
+          balanceCheckedAt: balance?.checked_at ?? null,
+          priceUsd: resolvedPriceUsd,
+          priceAsset: balance?.asset_key ?? null,
+          priceSource: resolvedPriceUsd === null ? null : PRICE_SOURCE,
+          priceCheckedAt: priceRow?.checked_at ?? null,
           bridgedTvlUsd,
           bridgedAmount24hUsd,
           pendingOutUsd: toUsd(exit?.pending_value_wei, resolvedPriceUsd),

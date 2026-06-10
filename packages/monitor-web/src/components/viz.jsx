@@ -3,6 +3,8 @@
    decision-tree statuses directly). */
 
 import React from 'react'
+import { Tip } from './tooltip.jsx'
+import { absolute } from '../time.js'
 
 // Chain logo badge — colored rounded square with initial
 export function ChainLogo({ chain, size = 30 }) {
@@ -29,8 +31,10 @@ export function ChainLogo({ chain, size = 30 }) {
   )
 }
 
-// Uptime bar strip
-export function UptimeBars({ history, w, h = 26, gap = 1.5 }) {
+// Uptime bar strip. `history` = 0..100 values; optional `checks` = the aligned
+// rpc_checks rows ({ checked_at, ok, latency_ms, error_code }) for per-bar
+// hover detail (timestamp in the browser's timezone).
+export function UptimeBars({ history, checks, w, h = 26, gap = 1.5 }) {
   if (!history || !history.length) {
     return (
       <div style={{ color: 'var(--text-4)', fontSize: 11, height: h, display: 'flex', alignItems: 'center' }}>
@@ -42,12 +46,10 @@ export function UptimeBars({ history, w, h = 26, gap = 1.5 }) {
     <div style={{ display: 'flex', gap, alignItems: 'flex-end', height: h, width: w || '100%' }}>
       {history.map((v, i) => {
         const color = v >= 99.5 ? 'var(--ok)' : v >= 95 ? 'var(--warn)' : 'var(--crit)'
-        return (
+        const bar = (
           <div
-            key={i}
-            title={v.toFixed(2) + '%'}
             style={{
-              flex: 1,
+              width: '100%',
               minWidth: 1.5,
               height: '100%',
               borderRadius: 1.5,
@@ -55,6 +57,25 @@ export function UptimeBars({ history, w, h = 26, gap = 1.5 }) {
               opacity: v >= 99.5 ? 0.55 : 0.95,
             }}
           />
+        )
+        const chk = checks && checks[i]
+        if (!chk) {
+          return <div key={i} title={v.toFixed(2) + '%'} style={{ flex: 1, height: '100%' }}>{bar}</div>
+        }
+        const statusColor = chk.ok ? (chk.latency_ms > 350 ? 'var(--warn)' : 'var(--ok)') : 'var(--crit)'
+        const label = (
+          <span>
+            <span style={{ color: 'var(--text)' }}>{absolute(chk.checked_at)}</span>
+            <br />
+            <span style={{ color: statusColor, fontFamily: 'var(--mono)', fontSize: 11 }}>
+              {chk.ok ? `reachable · ${chk.latency_ms != null ? chk.latency_ms + 'ms' : 'no latency'}` : `failed${chk.error_code ? ' · ' + chk.error_code : ''}`}
+            </span>
+          </span>
+        )
+        return (
+          <Tip key={i} block w={230} label={label} style={{ flex: 1, height: '100%' }}>
+            {bar}
+          </Tip>
         )
       })}
     </div>

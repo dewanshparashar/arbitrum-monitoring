@@ -135,6 +135,15 @@ export const toViewChain = c => {
       net24h: c.bridgedAmount24hUsd,
       pendingUsd: c.pendingOutUsd,
       pendingCount: c.pendingOutCount || 0,
+      // provenance — how the $ value is derived
+      balanceWei: c.nativeBalanceWei || null,
+      balanceEth: c.nativeBalanceWei != null ? Number(c.nativeBalanceWei) / 1e18 : null,
+      balanceAsset: c.priceAsset ? assetLabel(c.priceAsset) : assetLabel(c.nativeAssetKey),
+      balanceBlockNumber: c.balanceBlockNumber || null,
+      balanceCheckedAt: c.balanceCheckedAt || null,
+      priceUsd: c.priceUsd ?? null,
+      priceSource: c.priceSource || null,
+      priceCheckedAt: c.priceCheckedAt || null,
     },
     batch: {
       lastMins: minsSince(c.lastBatchAt),
@@ -304,7 +313,11 @@ export const fetchFleet = async () => {
     apiFetch('/api/fleet/overview'),
     apiFetch('/api/fleet/chains'),
   ])
-  return { overview, chains: chains.map(toViewChain) }
+  return {
+    overview,
+    chains: chains.map(toViewChain),
+    fetchedAt: Math.floor(Date.now() / 1000), // client clock, browser TZ
+  }
 }
 
 export const fetchChainDetail = async chainId => {

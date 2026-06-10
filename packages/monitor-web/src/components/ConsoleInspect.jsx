@@ -7,6 +7,7 @@
 
 import React from 'react'
 import * as F from '../fmt.js'
+import { full, relative, absolute } from '../time.js'
 import { fetchChainDetail, synthesizeAlerts, registerExplorersFromDetail } from '../api.js'
 import { ChainLogo, UptimeBars } from './viz.jsx'
 import { Tip, Ext } from './tooltip.jsx'
@@ -24,6 +25,30 @@ const C = {
 }
 const stColor = { ok: C.str, warn: C.warn, crit: C.crit, idle: C.com }
 const slug = c => c.id
+
+// full derivation of the bridged-TVL dollar figure, for a tooltip
+const TvlDerivation = ({ b }) => {
+  if (b.tvlUsd == null) {
+    return <span>No native-balance snapshot or price available for this chain yet.</span>
+  }
+  const mono = { fontFamily: 'var(--mono)', color: 'var(--text)' }
+  return (
+    <span>
+      <b style={{ color: '#fff' }}>Bridged TVL = bridge balance × price</b>
+      <br />
+      <br />
+      balance: <span style={mono}>{F.eth(b.balanceEth, b.balanceAsset || 'ETH')}</span>
+      {b.balanceBlockNumber ? ` @ block ${b.balanceBlockNumber}` : ''}
+      {b.balanceCheckedAt ? <><br /><span style={{ color: 'var(--text-3)' }}>snapshot {full(b.balanceCheckedAt)}</span></> : null}
+      <br />
+      price: <span style={mono}>{F.price(b.priceUsd)} / {b.balanceAsset || 'ETH'}</span>
+      {b.priceSource ? ` (${b.priceSource})` : ''}
+      {b.priceCheckedAt ? <><br /><span style={{ color: 'var(--text-3)' }}>priced {full(b.priceCheckedAt)}</span></> : null}
+      <br />
+      <br />= <b style={{ color: '#fff' }}>{F.money(b.tvlUsd)}</b>
+    </span>
+  )
+}
 
 // muted "not indexed" marker with an explanatory tooltip
 const Gap = ({ what }) => (
@@ -173,7 +198,10 @@ export function ConsoleInspect({ chain, onClose }) {
               </div>
               <div style={{ color: C.com, fontSize: 12, marginTop: 3 }}>
                 chainId <span style={{ color: C.num }}>{c.chainId}</span> · parent <span style={{ color: C.fn }}>{c.parent}</span> ·{' '}
-                <span style={{ color: C.kw }}>{c.transport.toLowerCase()}{c.bold ? '+bold' : ''}</span> · native <span style={{ color: C.flag }}>{c.native}</span>
+                <span style={{ color: C.kw }}>{c.transport.toLowerCase()}{c.bold ? '+bold' : ''}</span> ·{' '}
+                <Tip underline w={260} label="The asset whose bridge balance is priced for TVL (ETH). The chain's own gas token may differ — gas-token symbol isn't indexed.">
+                  bridge <span style={{ color: C.flag }}>{c.bridge.balanceAsset || c.native}</span>
+                </Tip>
               </div>
             </div>
           </div>
@@ -202,14 +230,23 @@ export function ConsoleInspect({ chain, onClose }) {
             >
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
                 <Metric
-                  label={<Tip underline label="Value bridged into the chain held in the canonical bridge — native-token balance × current price.">Bridged TVL</Tip>}
+                  label={
+                    <Tip underline w={300} label={<TvlDerivation b={c.bridge} />}>
+                      Bridged TVL
+                    </Tip>
+                  }
                   value={c.bridge.tvlUsd != null ? F.money(c.bridge.tvlUsd) : <Gap what="no native balance snapshot / price for this chain" />}
                   color={C.num}
                 />
                 <Metric
-                  label={<Tip underline label="The chain's native gas asset, from the indexed balance snapshot.">Native asset</Tip>}
-                  value={c.native}
+                  label={
+                    <Tip underline w={290} label={`ETH locked in this chain's canonical bridge contract on ${c.parent}. NOTE: this is bridge ETH, not the chain's gas-token TVL — per-token balances aren't indexed.`}>
+                      Bridge balance
+                    </Tip>
+                  }
+                  value={c.bridge.balanceEth != null ? F.eth(c.bridge.balanceEth, c.bridge.balanceAsset || 'ETH') : <Gap what="no balance snapshot" />}
                   color={C.txt}
+                  sub={c.bridge.balanceBlockNumber ? '@ block ' + c.bridge.balanceBlockNumber : null}
                 />
                 <Metric
                   label={<Tip underline w={250} label="Value in outbound messages that have left the chain but not yet been claimed on the parent chain.">Pending withdrawals</Tip>}
@@ -218,10 +255,25 @@ export function ConsoleInspect({ chain, onClose }) {
                   sub={c.bridge.pendingCount + ' claims'}
                 />
                 <Metric
-                  label={<Tip underline w={250} label="Per-asset ETH vs ERC-20 bridge breakdown is not indexed yet — only aggregate native-balance TVL is available.">ETH / ERC-20 split</Tip>}
-                  value={<Gap what="token-gateway flow breakdown not indexed" />}
+                  label={
+                    <Tip underline w={260} label={c.bridge.priceCheckedAt ? `Fetched ${full(c.bridge.priceCheckedAt)}` : 'Latest indexed price'}>
+                      {c.bridge.balanceAsset || 'ETH'} price
+                    </Tip>
+                  }
+                  value={c.bridge.priceUsd != null ? F.price(c.bridge.priceUsd) : <Gap what="no price snapshot" />}
                   color={C.txt}
+                  sub={c.bridge.priceSource ? c.bridge.priceSource + (c.bridge.priceCheckedAt ? ' · ' + relative(c.bridge.priceCheckedAt) : '') : null}
                 />
+              </div>
+              <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--hairline)', color: C.com, fontSize: 11 }}>
+                TVL ={' '}
+                <span style={{ color: C.txt }}>{c.bridge.balanceEth != null ? F.eth(c.bridge.balanceEth, c.bridge.balanceAsset || 'ETH') : '—'}</span>
+                {' × '}
+                <span style={{ color: C.txt }}>{c.bridge.priceUsd != null ? F.price(c.bridge.priceUsd) : '—'}</span>
+                {' · '}
+                <Tip w={280} label="Only the canonical ETH bridge balance is priced. Per-token (ERC-20) bridged value and custom gas-token TVL are not indexed yet.">
+                  <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>ERC-20 / gas-token TVL not indexed</span>
+                </Tip>
               </div>
             </Panel>
 
@@ -238,8 +290,8 @@ export function ConsoleInspect({ chain, onClose }) {
             >
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
                 <div style={{ flex: 1 }}>
-                  <Tip block w={260} label="Each bar is one indexed RPC probe. Green = healthy, amber = slow (>350ms), red = failed. Range spans the probes currently in the database.">
-                    <UptimeBars history={detail?.rpcHistory || []} h={34} />
+                  <Tip block w={260} label="Each bar is one indexed RPC probe — hover for its timestamp. Green = healthy, amber = slow (>350ms), red = failed. Range spans the probes currently in the database.">
+                    <UptimeBars history={detail?.rpcHistory || []} checks={detail?.rpcChecks || []} h={34} />
                   </Tip>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: C.com, fontSize: 10.5, marginTop: 5 }}>
                     <span>{rpcSpanLabel}</span>
@@ -258,6 +310,15 @@ export function ConsoleInspect({ chain, onClose }) {
                     color={stColor[c.rpc.status]}
                   />
                 </div>
+              </div>
+              <div style={{ marginTop: 8, color: C.com, fontSize: 11 }}>
+                last probe{' '}
+                <Tip label={full(c.rpc.lastCheckedAt)}>
+                  <span style={{ color: C.txt, borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>
+                    {c.rpc.lastCheckedAt ? relative(c.rpc.lastCheckedAt) : '—'}
+                  </span>
+                </Tip>{' '}
+                · {c.rpc.checks} probes in window
               </div>
             </Panel>
 

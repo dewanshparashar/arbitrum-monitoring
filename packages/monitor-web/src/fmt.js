@@ -14,6 +14,14 @@ export const money = n => {
 
 export const num = n => (n == null ? '—' : n.toLocaleString('en-US'))
 
+// precise USD for unit prices (not abbreviated like money())
+export const price = n => {
+  if (n == null) return '—'
+  const abs = Math.abs(n)
+  const maxFrac = abs >= 1 ? 2 : 6
+  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: maxFrac })
+}
+
 export const dur = mins => {
   if (mins == null) return '—'
   if (mins < 60) return Math.round(mins) + 'm'
