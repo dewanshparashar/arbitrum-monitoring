@@ -138,6 +138,7 @@ type FleetChain = {
   bridgedTvlUsd: number | null
   bridgedAmount24hUsd: number | null
   pendingOutUsd: number | null
+  pendingOutNative: number | null
   pendingOutCount: number
   arbosVersion: number | null
   arbosName: string | null
@@ -617,6 +618,9 @@ export class FleetDb {
           bridgedTvlUsd,
           bridgedAmount24hUsd,
           pendingOutUsd: toUsd(exit?.pending_value_wei, resolvedPriceUsd),
+          // L2→L1 callvalue is 18-decimal native (the chain's gas token),
+          // independent of any USD price — surfaced for the native fallback.
+          pendingOutNative: toNativeAmount(exit?.pending_value_wei, 18),
           pendingOutCount: parseCount(exit?.pending_count),
           arbosVersion: runtime?.arbos_version ?? null,
           arbosName: runtime?.arbos_name ?? null,

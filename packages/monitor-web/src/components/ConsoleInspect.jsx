@@ -280,8 +280,12 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                   sub={c.bridge.balanceBlockNumber ? '@ block ' + c.bridge.balanceBlockNumber : null}
                 />
                 <Metric
-                  label={<Tip underline w={250} label="Value in outbound messages that have left the chain but not yet been claimed on the parent chain.">Pending withdrawals</Tip>}
-                  value={c.bridge.pendingUsd != null ? F.money(c.bridge.pendingUsd) : <Gap what="exit_messages not populated by the worker" />}
+                  label={<Tip underline w={250} label="Value in outbound (L2→L1) messages that have left the chain but not yet been claimed on the parent chain. Denominated in the chain's native gas token; USD shown where a price feed exists.">Pending withdrawals</Tip>}
+                  value={c.bridge.pendingUsd != null
+                    ? F.money(c.bridge.pendingUsd)
+                    : c.bridge.pendingNative
+                      ? F.eth(c.bridge.pendingNative, c.bridge.balanceAsset || c.native)
+                      : <Gap what="no pending exits indexed (exit_messages empty for this chain)" />}
                   color={c.bridge.pendingCount > 100 ? C.warn : C.txt}
                   sub={c.bridge.pendingCount + ' claims'}
                 />

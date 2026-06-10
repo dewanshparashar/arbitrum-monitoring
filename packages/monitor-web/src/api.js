@@ -144,6 +144,7 @@ export const toViewChain = c => {
       tvlUsd: c.bridgedTvlUsd,
       net24h: c.bridgedAmount24hUsd,
       pendingUsd: c.pendingOutUsd,
+      pendingNative: c.pendingOutNative ?? null,
       pendingCount: c.pendingOutCount || 0,
       // provenance — how the $ value is derived
       balanceWei: c.nativeBalanceWei || null,
