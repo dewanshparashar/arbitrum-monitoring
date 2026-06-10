@@ -1,14 +1,19 @@
 # Docker VPS Deployment
 
-## What runs
+## What runs where
 
-- `monitor-indexer`: long-running Ponder worker
-- `monitor-api`: read-only API against the same Postgres schema
-- `monitor-web`: optional local static UI on port `4020`
+The VPS docker stack runs **only the backend writers**:
 
-The web app can still stay on Vercel. The critical services are the indexer and API.
+- `monitor-indexer`: long-running Ponder worker (event indexing)
+- `monitor-metrics`: long-running metrics worker (RPC uptime probes, bridge
+  balances, ETH price, exit-message backlog, worker heartbeat)
 
-Do not run two indexers against the same `POSTGRES_URL` and `DATABASE_SCHEMA` at the same time.
+The **API and web app run on Vercel** (stateless, reading the same Postgres) —
+they are not part of this docker stack. The VPS exposes no public ports; both
+containers only need outbound access to Postgres and the parent-chain RPCs.
+
+Do not run two indexers — or two metrics workers — against the same
+`POSTGRES_URL` and `DATABASE_SCHEMA` at the same time.
 
 ## Prerequisites
 
@@ -31,13 +36,15 @@ Create the env file from the example:
 cp deploy/hetzner/monitoring.env.example deploy/hetzner/monitoring.env
 ```
 
-Then edit `deploy/hetzner/monitoring.env` with your real values:
+Then edit `deploy/hetzner/monitoring.env` with your real values. The writers
+need:
 
 - `POSTGRES_URL`
 - `DATABASE_SCHEMA`
 - `MONITOR_PARENT_RPC_OVERRIDES`
-- `MONITOR_API_CORS_ORIGIN`
-- `MONITOR_WEB_API_BASE`
+
+(`MONITOR_API_CORS_ORIGIN` / `MONITOR_WEB_API_BASE` are consumed by the Vercel
+api/web deployment, not by these containers.)
 
 At minimum, use a dedicated RPC for parent chain `42161`.
 
@@ -49,13 +56,32 @@ After the env file is ready, the Docker path is just:
 docker compose up -d --build
 ```
 
+`-d` runs the stack **detached** — the containers keep running after you close
+your SSH session, and `restart: unless-stopped` brings them back after a crash
+or VPS reboot.
+
 What happens automatically:
 
-- the indexer container refreshes the portal snapshot on boot
-- the indexer container then starts `ponder`
-- the API container serves on port `4010`
-- the web container serves on port `4020`
-- the web container writes `MONITOR_WEB_API_BASE` into its runtime config before starting
+- the indexer container refreshes the portal snapshot on boot, then starts `ponder`
+- the metrics worker container builds and starts its cycle loop
+
+## Updating to the latest code
+
+To pick up a new push, pull and rebuild. `up -d --build` rebuilds the images
+from the new checkout and recreates each changed container (old one stopped, new
+one started — not duplicated); unchanged services are left running.
+
+```bash
+cd /opt/arbitrum-monitoring
+git pull
+docker compose up -d --build
+```
+
+To redeploy a single writer (e.g. only the metrics worker changed):
+
+```bash
+docker compose up -d --build monitor-metrics
+```
 
 ## Useful commands
 
@@ -63,15 +89,14 @@ Logs:
 
 ```bash
 docker compose logs -f monitor-indexer
-docker compose logs -f monitor-api
-docker compose logs -f monitor-web
+docker compose logs -f monitor-metrics
 ```
 
 Restart:
 
 ```bash
 docker compose restart monitor-indexer
-docker compose restart monitor-api
+docker compose restart monitor-metrics
 ```
 
 Stop:
@@ -80,12 +105,10 @@ Stop:
 docker compose down
 ```
 
-## API endpoints
+## Verifying
 
-When `monitor-api` is up, it should answer on:
+These containers expose no HTTP endpoints. Confirm they are healthy by their
+logs (above) and via the Vercel API, which reads what they write:
 
-- `http://YOUR_HOST:4010/health`
-- `http://YOUR_HOST:4010/api/fleet/overview`
-- `http://YOUR_HOST:4010/api/fleet/chains`
-
-If you put Caddy or Nginx in front, point the web app at that public API origin instead.
+- `https://<your-vercel-app>/api/fleet/overview`
+- `https://<your-vercel-app>/api/fleet/status` (worker heartbeat, indexer freshness, backlog)

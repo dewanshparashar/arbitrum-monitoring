@@ -9,7 +9,7 @@ COPY deploy ./deploy
 COPY README.md ./
 
 RUN yarn install --frozen-lockfile
-RUN chmod +x deploy/docker/start-indexer.sh deploy/docker/start-api.sh deploy/docker/start-web.sh
+RUN chmod +x deploy/docker/start-indexer.sh deploy/docker/start-api.sh deploy/docker/start-web.sh deploy/docker/start-metrics.sh
 
 FROM base AS monitor-indexer
 
@@ -17,6 +17,15 @@ ENV PONDER_TELEMETRY_DISABLED=1
 
 CMD ["./deploy/docker/start-indexer.sh"]
 
+FROM base AS monitor-metrics
+
+RUN yarn workspace monitor-metrics build
+
+CMD ["./deploy/docker/start-metrics.sh"]
+
+# The VPS docker stack (docker-compose.yml) builds only the two writers above.
+# The api/web targets below are optional self-host stages; in the default
+# deployment the API and web app run on Vercel, not in docker.
 FROM base AS monitor-api
 
 RUN yarn workspace monitor-api build

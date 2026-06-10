@@ -5,6 +5,7 @@ This repo now has an indexed fleet register path for Orbit mainnet chains.
 ## What ships here
 
 - `packages/monitor-indexer`: a Ponder indexer that derives its chain list from the latest portal `orbitChainsData.json` snapshot and indexes an 8-day window
+- `packages/monitor-metrics`: a metrics worker that probes RPC uptime/latency, snapshots bridge balances and ETH price, tracks the exit-message backlog, and writes a worker heartbeat
 - `packages/monitor-api`: a read-only API backed by Postgres
 - `packages/monitor-web`: a static fleet register UI that only talks to the API
 
@@ -79,10 +80,10 @@ The portal refresh script currently uses public RPC defaults for parent chains a
 
 ## Runtime model
 
-- `monitor-indexer` is the long-running process that talks to parent-chain RPCs and writes rows into Postgres or Supabase Postgres.
-- `monitor-api` reads those indexed tables and serves JSON to the frontend.
-- `monitor-web` is static and never populates the database itself.
-- Vercel can host the API and web app directly against Supabase while the indexer runs separately on your machine or on a dedicated worker host.
+- `monitor-indexer` and `monitor-metrics` are the long-running **writers**: they talk to parent-chain RPCs and write rows into Postgres / Supabase Postgres. These run on the VPS (docker or systemd).
+- `monitor-api` reads those indexed tables and serves JSON to the frontend. It is **stateless and runs on Vercel**.
+- `monitor-web` is static, never populates the database itself, and **runs on Vercel**.
+- So the split is: VPS = writers (indexer + metrics worker); Vercel = read-only API + web, both against the same Supabase Postgres.
 
 ## Product notes
 
@@ -95,11 +96,14 @@ See [docs/fleet-register.md](./docs/fleet-register.md) for the current model and
 
 ## VPS deploy
 
-The intended hosted shape is:
+The hosted shape is:
 
-- `monitor-indexer` on a long-running VPS worker
-- `monitor-api` on the same VPS
-- `monitor-web` on Vercel or another static host
+- **VPS (docker or systemd)** runs the writers: `monitor-indexer` + `monitor-metrics`
+- **Vercel** runs the read-only `monitor-api` and the static `monitor-web`, both against the same Supabase Postgres
+
+On the VPS, `docker compose up -d --build` runs both writers detached (survives
+SSH logout and reboots via `restart: unless-stopped`). To update: `git pull`
+then re-run the same command.
 
 Deployment assets for a Hetzner VPS live in:
 
@@ -107,7 +111,10 @@ Deployment assets for a Hetzner VPS live in:
 - [docs/docker-vps.md](./docs/docker-vps.md)
 - [deploy/hetzner/monitoring.env.example](./deploy/hetzner/monitoring.env.example)
 - [deploy/systemd/arbitrum-monitor-indexer.service](./deploy/systemd/arbitrum-monitor-indexer.service)
-- [deploy/systemd/arbitrum-monitor-api.service](./deploy/systemd/arbitrum-monitor-api.service)
-- [deploy/caddy/monitor-api.Caddyfile](./deploy/caddy/monitor-api.Caddyfile)
+- [deploy/systemd/arbitrum-monitor-metrics.service](./deploy/systemd/arbitrum-monitor-metrics.service)
 - [Dockerfile](./Dockerfile)
 - [docker-compose.yml](./docker-compose.yml)
+
+The Vercel side reads these env vars (`POSTGRES_URL`, `DATABASE_SCHEMA`,
+`MONITOR_API_CORS_ORIGIN`, `MONITOR_WEB_API_BASE`); the [Caddyfile](./deploy/caddy/monitor-api.Caddyfile)
+is only needed if you instead choose to self-host the API behind a reverse proxy.
