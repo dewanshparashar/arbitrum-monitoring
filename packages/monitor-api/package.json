@@ -14,7 +14,7 @@
     "vitest": "^3.0.5"
   },
   "scripts": {
-    "build": "rm -rf ./dist && tsc && cp ../monitor-indexer/src/generated/portalMainnet.json ./dist/portalMainnet.json",
+    "build": "rm -rf ./dist && tsc && cp ../monitor-indexer/src/generated/portalMainnet.json ./dist/portalMainnet.json && cp ../monitor-indexer/src/generated/portalMainnetExtra.json ./dist/portalMainnetExtra.json",
     "lint": "eslint .",
     "dev": "yarn build && node ./dist/main.js",
     "test": "vitest run __test__/*.test.ts"

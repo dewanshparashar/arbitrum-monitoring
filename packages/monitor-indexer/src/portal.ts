@@ -14,12 +14,7 @@ export type PortalMainnetChain = {
     bridge: string
     rollup: string
     sequencerInbox: string
-    inbox?: string | null
-    outbox?: string | null
   }
-  nativeToken?: string
-  nativeTokenSymbol?: string | null
-  nativeTokenName?: string | null
   bridgeUiConfig: {
     assertionIntervalSeconds: number | null
     fastWithdrawalTime: number | null

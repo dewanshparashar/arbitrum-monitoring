@@ -206,6 +206,14 @@ const getPortalSnapshotPath = () =>
     '../../monitor-indexer/src/generated/portalMainnet.json'
   )
 
+// inbox/outbox + gas-token fields, kept separate from portalMainnet.json so the
+// indexer's Ponder build id stays stable. Merged into chains at load time.
+const getPortalExtraPath = () =>
+  path.resolve(
+    __dirname,
+    '../../monitor-indexer/src/generated/portalMainnetExtra.json'
+  )
+
 const normalizeSchemaName = (value: string | undefined) => {
   const schema = (value || 'public').trim() || 'public'
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schema)) {
@@ -343,9 +351,37 @@ const loadPortalSnapshot = () => {
     return cachedPortalSnapshot
   }
 
-  cachedPortalSnapshot = JSON.parse(
+  const snapshot = JSON.parse(
     fs.readFileSync(getPortalSnapshotPath(), 'utf8')
   ) as PortalSnapshot
+
+  // merge the decoupled extras (inbox/outbox/gas token) if present
+  let extra: Record<string, {
+    inbox?: string
+    outbox?: string
+    nativeToken?: string
+    nativeTokenSymbol?: string
+    nativeTokenName?: string
+  }> = {}
+  try {
+    extra = JSON.parse(fs.readFileSync(getPortalExtraPath(), 'utf8'))
+  } catch {
+    extra = {}
+  }
+
+  snapshot.portalMainnetChains = snapshot.portalMainnetChains.map(chain => {
+    const e = extra[String(chain.chainId)]
+    if (!e) return chain
+    return {
+      ...chain,
+      ethBridge: { ...chain.ethBridge, inbox: e.inbox ?? null, outbox: e.outbox ?? null },
+      nativeToken: e.nativeToken,
+      nativeTokenSymbol: e.nativeTokenSymbol ?? null,
+      nativeTokenName: e.nativeTokenName ?? null,
+    }
+  })
+
+  cachedPortalSnapshot = snapshot
   return cachedPortalSnapshot
 }
 

@@ -13,18 +13,13 @@
       "ethBridge": {
         "bridge": "0x7dd8A76bdAeBE3BBBaCD7Aa87f1D4FDa1E60f94f",
         "rollup": "0xC47DacFbAa80Bd9D8112F4e8069482c2A3221336",
-        "sequencerInbox": "0x995a9d3ca121D48d21087eDE20bc8acb2398c8B1",
-        "inbox": "0xaE21fDA3de92dE2FDAF606233b2863782Ba046F9",
-        "outbox": "0x1E400568AD4840dbE50FB32f306B842e9ddeF726"
+        "sequencerInbox": "0x995a9d3ca121D48d21087eDE20bc8acb2398c8B1"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x4Cb9a7AE498CEDcBb5EAe9f25736aE7d428C9D66",
-      "nativeTokenSymbol": "XAI",
-      "nativeTokenName": "Xai"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 1380012617,
@@ -37,9 +32,7 @@
       "ethBridge": {
         "bridge": "0x255f80Ef2F09FCE0944faBb292b8510F01316Cf0",
         "rollup": "0x2e988Ea0873C9d712628F0bf38DAFdE754927C89",
-        "sequencerInbox": "0xA436f1867adD490BF1530c636f2FB090758bB6B3",
-        "inbox": "0x37e60F80d921dc5E7f501a7130F31f6548dBa564",
-        "outbox": "0x91591BB66075BCfF94AA128B003134165C3Ab83a"
+        "sequencerInbox": "0xA436f1867adD490BF1530c636f2FB090758bB6B3"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
@@ -58,9 +51,7 @@
       "ethBridge": {
         "bridge": "0xEca0fEB4aA6112a3923823559e7197294Bc49CC7",
         "rollup": "0xf3C4a84a948658D012C915Ad4bb4b501F6C3c075",
-        "sequencerInbox": "0xe0064A9fb8e45BfD8e5aB1cE7523888814A096E0",
-        "inbox": "0x2EAf07A964c6601c4fAefd6D8969DF0B84f65e55",
-        "outbox": "0xa4b3B4D5f7976a8D283864ea83f1Bb3D815b1798"
+        "sequencerInbox": "0xe0064A9fb8e45BfD8e5aB1cE7523888814A096E0"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 6300,
@@ -79,9 +70,7 @@
       "ethBridge": {
         "bridge": "0x34F81F9C4F3227DbaCcFF8E51DBaa1571e114759",
         "rollup": "0x435CEf963dE6CC2241da6f09CE6Bb3600cF259a9",
-        "sequencerInbox": "0xD00d2ef101d86C570dA8f38801f236b79a7a2A93",
-        "inbox": "0x703F97120c8E5F5fC7c878C309E9e84E118B0478",
-        "outbox": "0x31A1A120939007547aBC5e3BFaBDB6AcA6C00378"
+        "sequencerInbox": "0xD00d2ef101d86C570dA8f38801f236b79a7a2A93"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
@@ -100,18 +89,13 @@
       "ethBridge": {
         "bridge": "0xa104C0426e95a5538e89131DbB4163d230C35f86",
         "rollup": "0x36c6C69A6186D4475fc5c21181CD980Bd6E5e11F",
-        "sequencerInbox": "0xD80a805c86C14c879420eC6acb366D04D318fC0C",
-        "inbox": "0xEa83E8907C89Bc0D9517632f0ba081972E328631",
-        "outbox": "0xB360b2f57c645E847148d7C479b7468AbF6F707d"
+        "sequencerInbox": "0xD80a805c86C14c879420eC6acb366D04D318fC0C"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 900,
         "fastWithdrawalTime": 43200000
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0xbe9F61555F50DD6167f2772e9CF7519790d96624",
-      "nativeTokenSymbol": "SX",
-      "nativeTokenName": "SX Network"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 33139,
@@ -124,18 +108,13 @@
       "ethBridge": {
         "bridge": "0x6B71AFb4b7725227ab944c96FE018AB9dc0434b8",
         "rollup": "0x374de579AE15aD59eD0519aeAf1A23F348Df259c",
-        "sequencerInbox": "0xE6a92Ae29E24C343eE66A2B3D3ECB783d65E4a3C",
-        "inbox": "0x1B98e4ED82Ee1a91A65a38C690e2266364064D15",
-        "outbox": "0x4F405BA65291063d8A524c2bDf55d4e67405c2aF"
+        "sequencerInbox": "0xE6a92Ae29E24C343eE66A2B3D3ECB783d65E4a3C"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x7f9FBf9bDd3F4105C478b996B648FE6e828a1e98",
-      "nativeTokenSymbol": "APE",
-      "nativeTokenName": "ApeCoin"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 1625,
@@ -148,18 +127,13 @@
       "ethBridge": {
         "bridge": "0x7983403dDA368AA7d67145a9b81c5c517F364c42",
         "rollup": "0x2807B1d5d94ca823ca7d8642A5F5DDac120ce48f",
-        "sequencerInbox": "0x8D99372612e8cFE7163B1a453831Bc40eAeb3cF3",
-        "inbox": "0x7AD2a94BefF3294a31894cFb5ba4206957a53c19",
-        "outbox": "0x1153a1e4B1523DFf36f77d696bd6eBF2B0e7DAbF"
+        "sequencerInbox": "0x8D99372612e8cFE7163B1a453831Bc40eAeb3cF3"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 86400,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x9C7BEBa8F6eF6643aBd725e45a4E8387eF260649",
-      "nativeTokenSymbol": "G",
-      "nativeTokenName": "G"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 41923,
@@ -172,18 +146,13 @@
       "ethBridge": {
         "bridge": "0x2F12c50b46adB01a4961AdDa5038c0974C7C78e8",
         "rollup": "0xBaE3B462a2A7fb758F66D91170514C10B14Ce914",
-        "sequencerInbox": "0xA3464bf0ed52cFe6676D3e34ab1F4DF53f193631",
-        "inbox": "0x590044e628ea1B9C10a86738Cf7a7eeF52D031B8",
-        "outbox": "0x6339965Cb3002f5c746895e4eD895bd775dbfdf9"
+        "sequencerInbox": "0xA3464bf0ed52cFe6676D3e34ab1F4DF53f193631"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": 3600000
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0xf8173a39c56a554837C4C7f104153A005D284D11",
-      "nativeTokenSymbol": "EDU",
-      "nativeTokenName": "EDU"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 88899,
@@ -196,18 +165,13 @@
       "ethBridge": {
         "bridge": "0x80b4c2dBEacFF9921cD456e5E1489919185b8a1d",
         "rollup": "0xd6df93D93c2554412622C567965DA7B16929f0A5",
-        "sequencerInbox": "0x3A2898B10c88cb619635efdC027538D7Aa99BF79",
-        "inbox": "0x319a9c8be1CF9ECB16D29d6327A6Fa2e26Bf42BC",
-        "outbox": "0xd9AD042DCb18628a941C8868bf25e5eCf897E48c"
+        "sequencerInbox": "0x3A2898B10c88cb619635efdC027538D7Aa99BF79"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": null,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0xA6C6ea2e0140849bE02A3a34780CF61b766916c5",
-      "nativeTokenSymbol": "UNITE",
-      "nativeTokenName": "Unite"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 51828,
@@ -220,18 +184,13 @@
       "ethBridge": {
         "bridge": "0xd46AB997110a91C4CB6f4576ffE6769a3033622A",
         "rollup": "0xc905b1F4e9fFcC21a58B430FBa06d07203F641E1",
-        "sequencerInbox": "0x6CBf221c8cc7E2B9De4bce3a5c75378591Bdf8Ea",
-        "inbox": "0xF649EF414d5674851614615b3e3861E90a812379",
-        "outbox": "0x48a5c0942046753B8026b1dc074Dd22297A31340"
+        "sequencerInbox": "0x6CBf221c8cc7E2B9De4bce3a5c75378591Bdf8Ea"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 135000,
         "fastWithdrawalTime": 3600000
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x6a9896837021EA3eD83F623F655C119c54abE02c",
-      "nativeTokenSymbol": "BOUNTY",
-      "nativeTokenName": "ChainBounty"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 92278,
@@ -244,18 +203,13 @@
       "ethBridge": {
         "bridge": "0xaF25849aEb040bEab7a0c783fc6861d26aE49796",
         "rollup": "0x0DA5198b8ae8aE9354061649D08BE1c53ec8a377",
-        "sequencerInbox": "0x21f9c31eD91612B48A8ae450Bdd0f19F8f5Bea40",
-        "inbox": "0xc7b143E5E4Bf1893BA33007ecb3Db9c1092dab38",
-        "outbox": "0xA5b6E1DbA5c9037cCd2013D7dd7BD173AFc90d4c"
+        "sequencerInbox": "0x21f9c31eD91612B48A8ae450Bdd0f19F8f5Bea40"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 41400,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0xa4f63404b58C3efD9Db6D53352BD386fFa174e5A",
-      "nativeTokenSymbol": "MPT",
-      "nativeTokenName": "Miracle Play"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 98866,
@@ -268,18 +222,13 @@
       "ethBridge": {
         "bridge": "0x35381f63091926750F43b2A7401B083263aDEF83",
         "rollup": "0x4eD3F488a5a4417839BbC39712EB76D8Aaee6eE8",
-        "sequencerInbox": "0x85eC1b9138a8b9659A51e2b51bb0861901040b59",
-        "inbox": "0x943fc691242291B74B105e8D19bd9E5DC2fcBa1D",
-        "outbox": "0x7e4627bC114Fcd12ba912103279FD2858E644E71"
+        "sequencerInbox": "0x85eC1b9138a8b9659A51e2b51bb0861901040b59"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 86400,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x4C1746A800D224393fE2470C70A35717eD4eA5F1",
-      "nativeTokenSymbol": "PLUME",
-      "nativeTokenName": "Plume"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 6985385,
@@ -292,18 +241,13 @@
       "ethBridge": {
         "bridge": "0x8620F893F6321C31909e4a58bcEb6948A289e0fD",
         "rollup": "0x4ef3463F0Ffc1E9bfe30f72D705C259A0A0cCb56",
-        "sequencerInbox": "0xa80dD081B83399614fa0BB497174Bdcb3EF4Efe6",
-        "inbox": "0xe7D7C04885f460e0c58504D617C65ab064A4879D",
-        "outbox": "0x74045319D890f0C0CD7914F2DE757F25492331f0"
+        "sequencerInbox": "0xa80dD081B83399614fa0BB497174Bdcb3EF4Efe6"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0xcf5104d094e3864cfcbda43b82e1cefd26a016eb",
-      "nativeTokenSymbol": "H",
-      "nativeTokenName": "Humanity"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 613419,
@@ -316,18 +260,13 @@
       "ethBridge": {
         "bridge": "0xd75a60aFcBC113C1c76e42184663Da141f839053",
         "rollup": "0xf3B30Fd67211C57e2Cc36D5a41dB28415AF55BB7",
-        "sequencerInbox": "0x2fccc2de02Dd598E14403C4151F192d962E646Ba",
-        "inbox": "0x46a2f92Fa215eBc734e51b26da3d205de71FA930",
-        "outbox": "0xC327F5cDBAAc8879EE8017A0977C9a685A850a4F"
+        "sequencerInbox": "0x2fccc2de02Dd598E14403C4151F192d962E646Ba"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x690F1eEf8AcEaD09Ac695d9111Af081045c6d5b7",
-      "nativeTokenSymbol": "GNET",
-      "nativeTokenName": "GNET"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 32766,
@@ -340,18 +279,13 @@
       "ethBridge": {
         "bridge": "0xA9F4ee72439afC704db48dc049CbFb7E914aD300",
         "rollup": "0xc930fd48846e956b308f28524dA2d5E14c832e33",
-        "sequencerInbox": "0x38d41Ac2fbc3f13FcA7838F6638D8FbDb189e807",
-        "inbox": "0x446626827f14F89B38D5bA1ab152B484cd7912fD",
-        "outbox": "0x39919941b42DAb335d9924Ef56dF7b9813b2D6d9"
+        "sequencerInbox": "0x38d41Ac2fbc3f13FcA7838F6638D8FbDb189e807"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x3e62fED35c97145e6B445704B8CE74B2544776A9",
-      "nativeTokenSymbol": "EARNM",
-      "nativeTokenName": "Earnm Token"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 1628,
@@ -364,9 +298,7 @@
       "ethBridge": {
         "bridge": "0x61C4b51f9388A2DD62C791341f0d50AD88d64Fd4",
         "rollup": "0x7705e53B707AF758aCEa86580d5da155d2fB2921",
-        "sequencerInbox": "0xfF3e828FD206bD8491A7C77ABfb128860D314b6B",
-        "inbox": "0x1744424936C6F1A4921130b12AA4F3832B421002",
-        "outbox": "0xa0419E39cA100DCfC6F0d68D605d2445f387Fb4e"
+        "sequencerInbox": "0xfF3e828FD206bD8491A7C77ABfb128860D314b6B"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
@@ -385,9 +317,7 @@
       "ethBridge": {
         "bridge": "0x9948eDFBb9e0b104bAd60393dBe79d0BC7937014",
         "rollup": "0x8361fC54C99AdDbeD390Af68e7e6115323AB8DB1",
-        "sequencerInbox": "0x9B26957a661bc862FA0d7eb21813Aa008d0Cc6E6",
-        "inbox": "0xE0400a87d5Ee8a2Fc1dF2aAf4B6d8f89d0B9bE55",
-        "outbox": "0x433da6d107e942Ec4EAB1e86B16427B6071F6491"
+        "sequencerInbox": "0x9B26957a661bc862FA0d7eb21813Aa008d0Cc6E6"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 128700,
@@ -406,18 +336,13 @@
       "ethBridge": {
         "bridge": "0xA9C3B7672C477EeDA999A3ab1c8Eec28DEEB7d41",
         "rollup": "0xB6B4C28278FbBF444Ff7B6dF8fEdB7Bc90f72924",
-        "sequencerInbox": "0x5107C4267F13D0e55eab45A3129DB04AE8BB1AF3",
-        "inbox": "0x249D5D37502f26c5286De3096e0120FeAFa6772a",
-        "outbox": "0x5997b6350580178f0eaD414500eBA266b3C8d569"
+        "sequencerInbox": "0x5107C4267F13D0e55eab45A3129DB04AE8BB1AF3"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": 3600000
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x63C6667798fdA65E2E29228C43fbfDa0Cd4634A8",
-      "nativeTokenSymbol": "xUSD",
-      "nativeTokenName": "xUSD"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 869,
@@ -430,18 +355,13 @@
       "ethBridge": {
         "bridge": "0x249888c93F18f50a0EcA6a29b644F8Fa1Ff7539d",
         "rollup": "0x6Db7d43375720FFf98A50841ddddc80ACB07d969",
-        "sequencerInbox": "0x3Ba9426AcC831cDDa0Dd0b537f6b4E98670Bf280",
-        "inbox": "0x46EE1145523b58125fF5ed02A8946F748B9735FB",
-        "outbox": "0xa38d087580480A2266D2e50656bF43a39982c694"
+        "sequencerInbox": "0x3Ba9426AcC831cDDa0Dd0b537f6b4E98670Bf280"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x3e31966d4f81C72D2a55310A6365A56A4393E98D",
-      "nativeTokenSymbol": "WMTX",
-      "nativeTokenName": "World Mobile Token"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 510,
@@ -454,9 +374,7 @@
       "ethBridge": {
         "bridge": "0x3C8cF0ae6E89AC0796f29B3a58e7dEa1cD072277",
         "rollup": "0x451bD7813909B899DA6EbEC55E8fF823c057e14A",
-        "sequencerInbox": "0x12ad349e5d72B582856290736e0f13FE5fA57Aa4",
-        "inbox": "0x5EA55Fd41D42Eb307D281bdE78E4e7572A35ea13",
-        "outbox": "0xf555Bc86D1C953414F676479Bf7C979b1A737E8C"
+        "sequencerInbox": "0x12ad349e5d72B582856290736e0f13FE5fA57Aa4"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 3600,
@@ -475,9 +393,7 @@
       "ethBridge": {
         "bridge": "0x6F4836aFD5e21EDcee9b838C5a4125829EC198d0",
         "rollup": "0x14FdC47483e79d5A76599a74A2D622DA1cf97BBF",
-        "sequencerInbox": "0xe44B83D8a3A86994043C809E29B723a44FAEE479",
-        "inbox": "0xeB88b89e085D6B747Dd6b9CEaf2716bdd89F1E7c",
-        "outbox": "0x9f427c80C4DF962726808d4c876fc2c55474a764"
+        "sequencerInbox": "0xe44B83D8a3A86994043C809E29B723a44FAEE479"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 900,
@@ -496,18 +412,13 @@
       "ethBridge": {
         "bridge": "0x546bd55bF4f3F05810f14eea894cEaB8Cb58F1EA",
         "rollup": "0x1ad4DEDFe0D975D2b547aBD607194750aA7f6310",
-        "sequencerInbox": "0x37C6a6d9986542844D156F852A0047F7592b06fa",
-        "inbox": "0x76e17330a08C9e4943D9E617109cF1f4ED05Ee83",
-        "outbox": "0x15A2937b7FB92eC2b550B5Ce9bF8ffE92373d2F8"
+        "sequencerInbox": "0x37C6a6d9986542844D156F852A0047F7592b06fa"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 24300,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x7420B4b9a0110cdC71fB720908340C03F9Bc03EC",
-      "nativeTokenSymbol": "JASMY",
-      "nativeTokenName": "JasmyCoin"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 846737,
@@ -520,18 +431,13 @@
       "ethBridge": {
         "bridge": "0x9d4AB2E611a7b9Fdc0168C4C1EEd563eba35A43D",
         "rollup": "0xB6192CB8E2acBb34Ca83c7a39161CE207fEf4b5C",
-        "sequencerInbox": "0x9fE4399563Cb6e1Bbb0947d51420Dbb725b16ffE",
-        "inbox": "0xAFbB601aa3c5F7D38e8C19422A9a16EcD066bCde",
-        "outbox": "0x12097891604714718b1eaf24C4e7c5BcBFBc6A0A"
+        "sequencerInbox": "0x9fE4399563Cb6e1Bbb0947d51420Dbb725b16ffE"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 900,
         "fastWithdrawalTime": 900000
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x9Ffb8BAE5feD58AF7dC06C096D1AfC981DE8A387",
-      "nativeTokenSymbol": "PAX",
-      "nativeTokenName": "Panax"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 7869,
@@ -544,18 +450,13 @@
       "ethBridge": {
         "bridge": "0x53b168016aA2E3469B5D76315311aAC4Ce0020DB",
         "rollup": "0xc3196FEE2b194bf699076865060d566c7Cb02892",
-        "sequencerInbox": "0x903Af716AA8C7C27Fd785F453D5a59C20E06bDeC",
-        "inbox": "0x7d4509336b154C17Df80D03A19C051ddAcdA2e7f",
-        "outbox": "0xc0dd0a059a8a948B7737D00bfC9024475C791259"
+        "sequencerInbox": "0x903Af716AA8C7C27Fd785F453D5a59C20E06bDeC"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 20700,
         "fastWithdrawalTime": 86400000
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x429F0d8233e517f9acf6F0C8293BF35804063a83",
-      "nativeTokenSymbol": "POWER",
-      "nativeTokenName": "Powerloom Token"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 20010,
@@ -568,18 +469,13 @@
       "ethBridge": {
         "bridge": "0x65DB181838b53f32428ce106fA5355b7e4806b79",
         "rollup": "0x218D35154D1efEBFC46D64451C9495288219b275",
-        "sequencerInbox": "0x325acf46079d3f750D5D7E6182E094B1fD0AC2F4",
-        "inbox": "0x62DfD05c460C7E55DA85B39EaD3eBc6e0CcdD0d5",
-        "outbox": "0x004eF39261cee56409Dbd26040a33Eca8326490C"
+        "sequencerInbox": "0x325acf46079d3f750D5D7E6182E094B1fD0AC2F4"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 18000,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0x5a30Ed2D3650c99e9B0de9063982495e9818BBE2",
-      "nativeTokenSymbol": "KPG",
-      "nativeTokenName": "Kepeng"
+      "rollupEventFamily": "unknown"
     },
     {
       "chainId": 704851,
@@ -592,18 +488,13 @@
       "ethBridge": {
         "bridge": "0x8b4Fea8C461178b88764BDd1ED55511ADe8ED2D0",
         "rollup": "0xFe4c435944aa9530E3A2F8A0B7561838Ba89E249",
-        "sequencerInbox": "0x357B846f75c0AAF643f94c9b26f050eAE843Cb28",
-        "inbox": "0x049Ae563fdF978dbB6DB013613F28B4BffB3593f",
-        "outbox": "0x505fD31bfb3f60028870EF3D5ca76b2fdf8A0C9F"
+        "sequencerInbox": "0x357B846f75c0AAF643f94c9b26f050eAE843Cb28"
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": null,
         "fastWithdrawalTime": null
       },
-      "rollupEventFamily": "unknown",
-      "nativeToken": "0xFFDA496F1E9338836F4516C1C09423580D62D5CE",
-      "nativeTokenSymbol": "MarsC",
-      "nativeTokenName": "MarsCoin"
+      "rollupEventFamily": "unknown"
     }
   ],
   "portalParentChainIds": [

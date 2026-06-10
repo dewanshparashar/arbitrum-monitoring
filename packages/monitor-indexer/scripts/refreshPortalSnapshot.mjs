@@ -11,6 +11,7 @@ const PORTAL_URL =
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const PACKAGE_DIR = path.resolve(SCRIPT_DIR, '..')
 const OUT_PATH = path.join(PACKAGE_DIR, 'src/generated/portalMainnet.json')
+const EXTRA_OUT_PATH = path.join(PACKAGE_DIR, 'src/generated/portalMainnetExtra.json')
 const require = createRequire(import.meta.url)
 const rollupCoreArtifact = require(
   '@arbitrum/nitro-contracts/build/contracts/src/rollup/IRollupCore.sol/IRollupCore.json'
@@ -47,42 +48,45 @@ const boldAssertionCreatedSelector = toEventSelector(boldAssertionCreatedEvent)
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 
-const pickChain = chain => {
+// IMPORTANT: keep portalMainnet.json MINIMAL — only the fields the indexer's
+// Ponder config consumes. Anything else (inbox/outbox/gas token) goes into the
+// separate portalMainnetExtra.json so changing it never perturbs the indexer's
+// Ponder build id. See pickChainExtra below.
+const pickChain = chain => ({
+  chainId: chain.chainId,
+  name: chain.name,
+  slug: chain.slug,
+  parentChainId: chain.parentChainId,
+  confirmPeriodBlocks: chain.confirmPeriodBlocks,
+  rpcUrl: chain.rpcUrl,
+  explorerUrl: chain.explorerUrl,
+  ethBridge: {
+    bridge: chain.ethBridge.bridge,
+    rollup: chain.ethBridge.rollup,
+    sequencerInbox: chain.ethBridge.sequencerInbox,
+  },
+  bridgeUiConfig: {
+    assertionIntervalSeconds:
+      chain.bridgeUiConfig?.assertionIntervalSeconds ?? null,
+    fastWithdrawalTime: chain.bridgeUiConfig?.fastWithdrawalTime ?? null,
+  },
+})
+
+// Extra per-chain fields consumed by the API/worker only (NOT the indexer).
+const pickChainExtra = chain => {
   const nativeToken = chain.nativeToken
   const hasCustomGasToken =
-    typeof nativeToken === 'string' &&
-    nativeToken.toLowerCase() !== ZERO_ADDRESS
+    typeof nativeToken === 'string' && nativeToken.toLowerCase() !== ZERO_ADDRESS
   const nativeTokenData = chain.bridgeUiConfig?.nativeTokenData ?? {}
-
-  return {
-    chainId: chain.chainId,
-    name: chain.name,
-    slug: chain.slug,
-    parentChainId: chain.parentChainId,
-    confirmPeriodBlocks: chain.confirmPeriodBlocks,
-    rpcUrl: chain.rpcUrl,
-    explorerUrl: chain.explorerUrl,
-    ethBridge: {
-      bridge: chain.ethBridge.bridge,
-      rollup: chain.ethBridge.rollup,
-      sequencerInbox: chain.ethBridge.sequencerInbox,
-      inbox: chain.ethBridge.inbox ?? null,
-      outbox: chain.ethBridge.outbox ?? null,
-    },
-    // Custom gas token (parent-chain ERC-20) when set; ETH chains omit it.
-    ...(hasCustomGasToken
-      ? {
-          nativeToken,
-          nativeTokenSymbol: nativeTokenData.symbol ?? null,
-          nativeTokenName: nativeTokenData.name ?? null,
-        }
-      : {}),
-    bridgeUiConfig: {
-      assertionIntervalSeconds:
-        chain.bridgeUiConfig?.assertionIntervalSeconds ?? null,
-      fastWithdrawalTime: chain.bridgeUiConfig?.fastWithdrawalTime ?? null,
-    },
+  const extra = {}
+  if (chain.ethBridge?.inbox) extra.inbox = chain.ethBridge.inbox
+  if (chain.ethBridge?.outbox) extra.outbox = chain.ethBridge.outbox
+  if (hasCustomGasToken) {
+    extra.nativeToken = nativeToken
+    if (nativeTokenData.symbol) extra.nativeTokenSymbol = nativeTokenData.symbol
+    if (nativeTokenData.name) extra.nativeTokenName = nativeTokenData.name
   }
+  return extra
 }
 
 const getLatestBlockNumber = async (rpcUrl, chainId) => {
@@ -165,9 +169,15 @@ const main = async () => {
   }
 
   const json = await response.json()
-  const mainnet = (json.mainnet ?? [])
-    .filter(chain => !chain.isTestnet)
-    .map(pickChain)
+  const rawMainnet = (json.mainnet ?? []).filter(chain => !chain.isTestnet)
+  const mainnet = rawMainnet.map(pickChain)
+
+  // decoupled extras (inbox/outbox/gas token) keyed by chainId
+  const extra = {}
+  for (const chain of rawMainnet) {
+    const e = pickChainExtra(chain)
+    if (Object.keys(e).length) extra[chain.chainId] = e
+  }
 
   const parentChainIds = Array.from(
     new Set(mainnet.map(chain => chain.parentChainId))
@@ -219,7 +229,9 @@ const main = async () => {
       2
     )
   )
+  writeFileSync(EXTRA_OUT_PATH, JSON.stringify(extra, null, 2) + '\n')
   console.log(`Wrote ${profiledMainnet.length} mainnet chains to ${OUT_PATH}`)
+  console.log(`Wrote extras for ${Object.keys(extra).length} chains to ${EXTRA_OUT_PATH}`)
 }
 
 main().catch(error => {

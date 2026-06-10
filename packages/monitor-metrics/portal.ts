@@ -1,4 +1,7 @@
 import snapshot from '../monitor-indexer/src/generated/portalMainnet.json'
+// inbox/outbox + gas-token fields live in a SEPARATE file so the indexer's
+// portalMainnet.json (and thus its Ponder build id) stays stable. Merged in here.
+import extra from '../monitor-indexer/src/generated/portalMainnetExtra.json'
 
 export type PortalMainnetChain = {
   chainId: number
@@ -26,6 +29,27 @@ type PortalSnapshot = {
 
 const data = snapshot as PortalSnapshot
 
+type ChainExtra = {
+  inbox?: string
+  outbox?: string
+  nativeToken?: string
+  nativeTokenSymbol?: string
+  nativeTokenName?: string
+}
+const extraByChainId = extra as Record<string, ChainExtra>
+
+const mergeExtra = (chain: PortalMainnetChain): PortalMainnetChain => {
+  const e = extraByChainId[String(chain.chainId)]
+  if (!e) return chain
+  return {
+    ...chain,
+    ethBridge: { ...chain.ethBridge, inbox: e.inbox ?? null, outbox: e.outbox ?? null },
+    nativeToken: e.nativeToken,
+    nativeTokenSymbol: e.nativeTokenSymbol ?? null,
+    nativeTokenName: e.nativeTokenName ?? null,
+  }
+}
+
 const defaultParentRpcs: Record<number, string> = {
   1: 'https://ethereum-rpc.publicnode.com',
   8453: 'https://base-rpc.publicnode.com',
@@ -44,7 +68,7 @@ const parseParentRpcOverrides = () => {
   ) as Record<number, string>
 }
 
-export const getMainnetChains = () => data.portalMainnetChains
+export const getMainnetChains = () => data.portalMainnetChains.map(mergeExtra)
 
 export const getParentStartBlocks = () =>
   Object.fromEntries(
