@@ -5,6 +5,14 @@
 
 import React from 'react'
 import { createPortal } from 'react-dom'
+import {
+  useFloating,
+  offset,
+  flip,
+  shift,
+  arrow,
+  autoUpdate,
+} from '@floating-ui/react-dom'
 import { expl } from '../fmt.js'
 
 // close delay so the pointer can travel from the trigger into the tooltip
@@ -12,17 +20,24 @@ const CLOSE_DELAY_MS = 220
 
 export function Tip({ label, children, w = 240, underline = false, block = false, style }) {
   const [show, setShow] = React.useState(false)
-  const [pos, setPos] = React.useState({ x: 0, y: 0, above: true })
-  const ref = React.useRef(null)
+  const arrowRef = React.useRef(null)
   const closeTimer = React.useRef(null)
 
-  const place = () => {
-    if (!ref.current) return
-    const r = ref.current.getBoundingClientRect()
-    const above = r.top > 140
-    setPos({ x: r.left + r.width / 2, y: above ? r.top - 9 : r.bottom + 9, above })
-    setShow(true)
-  }
+  // Floating UI handles collision-aware placement: flip() flips top/bottom when
+  // it would overflow, shift() slides it horizontally to stay on-screen (fixes
+  // corner cut-off), and autoUpdate keeps it pinned on scroll/resize.
+  const { refs, floatingStyles, placement, middlewareData } = useFloating({
+    open: show,
+    placement: 'top',
+    strategy: 'fixed',
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset(9),
+      flip({ padding: 8 }),
+      shift({ padding: 8 }),
+      arrow({ element: arrowRef, padding: 8 }),
+    ],
+  })
 
   const cancelClose = () => {
     if (closeTimer.current) {
@@ -32,7 +47,7 @@ export function Tip({ label, children, w = 240, underline = false, block = false
   }
   const open = () => {
     cancelClose()
-    place()
+    setShow(true)
   }
   const scheduleClose = () => {
     cancelClose()
@@ -43,19 +58,14 @@ export function Tip({ label, children, w = 240, underline = false, block = false
     setShow(false)
   }
 
-  // dismiss on scroll / Escape while open (fixed-position tip would otherwise detach)
+  // Escape dismisses; autoUpdate repositions on scroll so we no longer hide on scroll.
   React.useEffect(() => {
     if (!show) return undefined
-    const onScroll = () => closeNow()
     const onKey = e => {
       if (e.key === 'Escape') closeNow()
     }
-    window.addEventListener('scroll', onScroll, true)
     window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('keydown', onKey)
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [show])
 
   React.useEffect(() => () => cancelClose(), [])
@@ -67,19 +77,23 @@ export function Tip({ label, children, w = 240, underline = false, block = false
     ...style,
   }
 
+  const side = placement.split('-')[0] // top | bottom | left | right
+  const above = side === 'top'
+  const arrowData = middlewareData.arrow || {}
+
   return (
-    <span ref={ref} onMouseEnter={open} onMouseLeave={scheduleClose} style={wrapStyle}>
-      {children}
+    <>
+      <span ref={refs.setReference} onMouseEnter={open} onMouseLeave={scheduleClose} style={wrapStyle}>
+        {children}
+      </span>
       {show &&
         createPortal(
           <div
+            ref={refs.setFloating}
             onMouseEnter={cancelClose}
             onMouseLeave={scheduleClose}
             style={{
-              position: 'fixed',
-              left: pos.x,
-              top: pos.y,
-              transform: `translate(-50%, ${pos.above ? '-100%' : '0'})`,
+              ...floatingStyles,
               maxWidth: w,
               zIndex: 9999,
               pointerEvents: 'auto',
@@ -95,35 +109,39 @@ export function Tip({ label, children, w = 240, underline = false, block = false
               animation: 'tipIn .12s ease',
             }}
           >
-            {/* invisible bridge over the 9px gap so moving to the tip doesn't close it */}
+            {/* invisible bridge over the 9px offset gap so moving to the tip keeps it open */}
             <span
               style={{
                 position: 'absolute',
                 left: 0,
                 right: 0,
-                [pos.above ? 'bottom' : 'top']: -10,
+                [above ? 'bottom' : 'top']: -10,
                 height: 10,
               }}
             />
             {label}
-            <span
-              style={{
-                position: 'absolute',
-                left: '50%',
-                marginLeft: -5,
-                [pos.above ? 'bottom' : 'top']: -5,
-                width: 9,
-                height: 9,
-                background: '#0E121B',
-                borderRight: '1px solid var(--hairline-2)',
-                borderBottom: '1px solid var(--hairline-2)',
-                transform: `rotate(${pos.above ? 45 : 225}deg)`,
-              }}
-            />
+            {/* arrow — only render for vertical placements where we have an x anchor */}
+            {(side === 'top' || side === 'bottom') && (
+              <span
+                ref={arrowRef}
+                style={{
+                  position: 'absolute',
+                  left: arrowData.x != null ? arrowData.x : '50%',
+                  marginLeft: arrowData.x != null ? 0 : -5,
+                  [above ? 'bottom' : 'top']: -5,
+                  width: 9,
+                  height: 9,
+                  background: '#0E121B',
+                  borderRight: '1px solid var(--hairline-2)',
+                  borderBottom: '1px solid var(--hairline-2)',
+                  transform: `rotate(${above ? 45 : 225}deg)`,
+                }}
+              />
+            )}
           </div>,
           document.body
         )}
-    </span>
+    </>
   )
 }
 

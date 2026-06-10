@@ -6,6 +6,7 @@
    docs/monitor-web-data-gaps.md. */
 
 import React from 'react'
+import useSWR from 'swr'
 import * as F from '../fmt.js'
 import { full, relative, absolute } from '../time.js'
 import { fetchChainDetail, synthesizeAlerts, registerExplorersFromDetail } from '../api.js'
@@ -78,9 +79,6 @@ const Gap = ({ what }) => (
 )
 
 export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClose }) {
-  const [detail, setDetail] = React.useState(null)
-  const [error, setError] = React.useState(null)
-
   React.useEffect(() => {
     const onKey = e => {
       if (e.key === 'Escape') onClose()
@@ -89,21 +87,21 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  React.useEffect(() => {
-    let live = true
-    setDetail(null)
-    setError(null)
-    fetchChainDetail(chain.chainId)
-      .then(d => {
-        if (!live) return
-        registerExplorersFromDetail(d)
-        setDetail(d)
-      })
-      .catch(e => live && setError(e instanceof Error ? e.message : 'Failed to load detail.'))
-    return () => {
-      live = false
+  // SWR keyed by chainId: refetches when you switch chains and refreshes the
+  // open drawer every 30s. No keepPreviousData, so switching chains falls back
+  // to the list row (`chain`) until the new detail loads — never shows stale.
+  const { data: detail, error: detailErr } = useSWR(
+    ['chain-detail', chain.chainId],
+    () => fetchChainDetail(chain.chainId),
+    {
+      refreshInterval: 30_000,
+      revalidateOnFocus: true,
+      onSuccess: d => {
+        if (d) registerExplorersFromDetail(d)
+      },
     }
-  }, [chain.chainId])
+  )
+  const error = detailErr ? (detailErr instanceof Error ? detailErr.message : 'Failed to load detail.') : null
 
   const c = detail || chain
   const alerts = synthesizeAlerts(chain)

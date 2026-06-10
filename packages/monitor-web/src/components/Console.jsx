@@ -4,6 +4,7 @@
    from the API's decision-tree health statuses. */
 
 import React from 'react'
+import useSWR from 'swr'
 import * as F from '../fmt.js'
 import { full, relative, absolute } from '../time.js'
 import { fetchFleet } from '../api.js'
@@ -107,12 +108,23 @@ const heartbeatChar = v =>
   v == null ? '·' : v >= 99.5 ? '▁' : v >= 99 ? '▃' : v >= 97 ? '▅' : v >= 90 ? '▆' : '█'
 
 export function Console() {
-  const [chains, setChains] = React.useState([])
-  const [overview, setOverview] = React.useState(null)
-  const [statusInfo, setStatusInfo] = React.useState(null)
-  const [fetchedAt, setFetchedAt] = React.useState(null)
-  const [status, setStatus] = React.useState('loading')
-  const [error, setError] = React.useState(null)
+  // SWR: poll the fleet every POLL_MS, revalidate on window focus, and keep the
+  // previous data visible while refetching (no flicker / no splash on refresh).
+  const { data, error: swrError } = useSWR('fleet', fetchFleet, {
+    refreshInterval: POLL_MS,
+    revalidateOnFocus: true,
+    keepPreviousData: true,
+    dedupingInterval: 15_000,
+  })
+  const chains = data?.chains ?? []
+  const overview = data?.overview ?? null
+  const statusInfo = data?.status ?? null
+  const fetchedAt = data?.fetchedAt ?? null
+  // stale-while-revalidate: once we have data we stay 'ok' even if a background
+  // refresh later errors; only show 'error'/'loading' before the first payload.
+  const status = data ? 'ok' : swrError ? 'error' : 'loading'
+  const error = !data && swrError ? (swrError instanceof Error ? swrError.message : 'Failed to load fleet.') : null
+
   const [selected, setSelected] = React.useState(null)
   const [showLegend, setShowLegend] = React.useState(false)
   const [frame, setFrame] = React.useState(0)
@@ -140,32 +152,6 @@ export function Console() {
     const s = setInterval(() => setFrame(f => (f + 1) % SPINNER.length), 90)
     return () => clearInterval(s)
   }, [splashing])
-
-  React.useEffect(() => {
-    let live = true
-    const load = async () => {
-      try {
-        const { overview, chains, status, fetchedAt } = await fetchFleet()
-        if (!live) return
-        setOverview(overview)
-        setChains(chains)
-        setStatusInfo(status)
-        setFetchedAt(fetchedAt)
-        setStatus('ok')
-        setError(null)
-      } catch (e) {
-        if (!live) return
-        setStatus('error')
-        setError(e instanceof Error ? e.message : 'Failed to load fleet.')
-      }
-    }
-    load()
-    const iv = setInterval(load, POLL_MS)
-    return () => {
-      live = false
-      clearInterval(iv)
-    }
-  }, [])
 
   const sorted = [...chains].sort(
     (a, b) => order[a.health] - order[b.health] || (b.bridge.tvlUsd || 0) - (a.bridge.tvlUsd || 0)
