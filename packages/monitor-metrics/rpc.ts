@@ -129,6 +129,21 @@ export const probeRpc = async (rpcUrl: string) => {
 export const getBlockNumber = (rpcUrl: string) =>
   rpcCall<string>(rpcUrl, 'eth_blockNumber', [], { retries: 2 }).then(value => BigInt(value))
 
+// Block timestamp + transaction count in one call (transactions:false returns
+// the array of tx hashes, whose length is the count). Used for TPS sampling.
+export const getBlockTxStats = async (rpcUrl: string, blockNumber: bigint) => {
+  const block = await rpcCall<{ timestamp: string; transactions: string[] }>(
+    rpcUrl,
+    'eth_getBlockByNumber',
+    [toHexBlock(blockNumber), false],
+    { timeoutMs: 8_000, retries: 1 }
+  )
+  return {
+    timestamp: BigInt(block.timestamp),
+    txCount: Array.isArray(block.transactions) ? block.transactions.length : 0,
+  }
+}
+
 export const getBlock = async (rpcUrl: string, blockNumber: bigint) => {
   const block = await rpcCall<{ timestamp: string }>(
     rpcUrl,

@@ -9,6 +9,7 @@ import {
   getArbOsVersionRaw,
   getBalance,
   getBlockNumber,
+  getBlockTxStats,
   getErc20Balance,
   getErc20Decimals,
   getLogs,
@@ -149,11 +150,15 @@ class MetricsDb {
         arbos_version integer,
         arbos_name text,
         batch_poster text,
+        tps double precision,
         checked_at timestamptz not null
       )
     `)
     await this.pool.query(
       `alter table ${this.chainRuntimeTable} add column if not exists batch_poster text`
+    )
+    await this.pool.query(
+      `alter table ${this.chainRuntimeTable} add column if not exists tps double precision`
     )
   }
 
@@ -291,6 +296,20 @@ class MetricsDb {
             checked_at = excluded.checked_at
       `,
       [row.chainId, row.batchPoster, row.checkedAt]
+    )
+  }
+
+  // Upserts just the TPS column (child-chain throughput sampled per cycle).
+  async upsertChainTps(row: { chainId: number; tps: number; checkedAt: string }) {
+    await this.pool.query(
+      `
+        insert into ${this.chainRuntimeTable} (chain_id, tps, checked_at)
+        values ($1, $2, $3)
+        on conflict (chain_id) do update
+        set tps = excluded.tps,
+            checked_at = excluded.checked_at
+      `,
+      [row.chainId, row.tps, row.checkedAt]
     )
   }
 
@@ -697,6 +716,27 @@ const arbosNameFor = (version: number): string | null => {
   return ARBOS_FAMILY_BY_DECADE[Math.floor(version / 10)] ?? null
 }
 
+// child-chain TPS is sampled over a window of recent blocks each cycle
+const TPS_WINDOW_BLOCKS = Math.max(2, Number(process.env.MONITOR_METRICS_TPS_WINDOW || 20))
+
+// TPS = total txs across the last N child blocks / the window's wall-clock span.
+const sampleTps = async (rpcUrl: string): Promise<number | null> => {
+  const head = await getBlockNumber(rpcUrl)
+  const span = BigInt(TPS_WINDOW_BLOCKS - 1)
+  const from = head > span ? head - span : 0n
+
+  const nums: bigint[] = []
+  for (let b = from; b <= head; b++) nums.push(b)
+  const blocks = await Promise.all(nums.map(n => getBlockTxStats(rpcUrl, n)))
+  if (blocks.length < 2) return null
+
+  const sumTx = blocks.reduce((total, block) => total + block.txCount, 0)
+  const seconds = Number(blocks[blocks.length - 1].timestamp - blocks[0].timestamp)
+  if (seconds <= 0) return null
+  const tps = sumTx / seconds
+  return Number.isFinite(tps) ? tps : null
+}
+
 const syncChainRuntime = async (db: MetricsDb) => {
   const checkedAt = new Date().toISOString()
   const parentRpcUrls = getParentRpcUrls()
@@ -742,6 +782,17 @@ const syncChainRuntime = async (db: MetricsDb) => {
         }
       } catch (error) {
         console.error(`batch poster read failed for ${chain.slug}`, error)
+      }
+
+      // TPS — sampled from the chain's own RPC (child chain), isolated so a
+      // flaky child RPC doesn't drop arbos/batch-poster above.
+      try {
+        const tps = await sampleTps(chain.rpcUrl)
+        if (tps != null) {
+          await db.upsertChainTps({ chainId: chain.chainId, tps, checkedAt })
+        }
+      } catch (error) {
+        console.error(`tps sample failed for ${chain.slug}`, error)
       }
     })
   )

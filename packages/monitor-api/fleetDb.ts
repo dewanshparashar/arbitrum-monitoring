@@ -72,6 +72,7 @@ type ChainRuntimeRow = {
   arbos_version: number | null
   arbos_name: string | null
   batch_poster: string | null
+  tps: number | null
   checked_at: number | null
 }
 
@@ -146,6 +147,7 @@ type FleetChain = {
   arbosName: string | null
   arbosRaw: number | null
   batchPoster: string | null
+  tps: number | null
   runtimeCheckedAt: number | null
   alerts: number
 }
@@ -560,6 +562,7 @@ export class FleetDb {
             arbos_version,
             arbos_name,
             batch_poster,
+            tps,
             cast(extract(epoch from checked_at) as bigint) as checked_at
           from ${this.chainRuntimeTable}
         `),
@@ -670,6 +673,7 @@ export class FleetDb {
           arbosName: runtime?.arbos_name ?? null,
           arbosRaw: runtime?.arbos_raw ?? null,
           batchPoster: runtime?.batch_poster ?? null,
+          tps: runtime?.tps != null ? Number(runtime.tps) : null,
           runtimeCheckedAt: runtime?.checked_at ?? null,
           alerts: countAlerts(retryableStatus, batchStatus, assertionStatus),
         }

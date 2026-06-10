@@ -231,6 +231,7 @@ export const HEADERS = {
   retry: 'Open retryable (parent→child) tickets in the window. The trailing ·N! flags urgent ones (expiring within 2 days or already expired).',
   alert: 'Count of R/B/A monitors currently firing (not healthy) for this chain, 0–3.',
   lat: 'Latency of the latest successful RPC probe (eth_blockNumber).',
+  tps: 'Estimated transactions per second on the chain itself — total txns across its last ~20 blocks divided by the window\'s time span, sampled from the chain\'s own RPC each worker cycle (the ~ prefix denotes an estimate). Not indexed (zero indexer overhead); most dedicated chains idle near 0.',
   rpc: 'RPC reachability over the indexer window. Each bar = one probe; per-probe timestamps on hover in the inspector.',
 }
 

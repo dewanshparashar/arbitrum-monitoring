@@ -107,6 +107,25 @@ function Splash({ frame, progress = 0, error }) {
 const heartbeatChar = v =>
   v == null ? '·' : v >= 99.5 ? '▁' : v >= 99 ? '▃' : v >= 97 ? '▅' : v >= 90 ? '▆' : '█'
 
+const fmtTps = v => (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v).toString())
+
+// TPS is a sampled estimate; for non-zero chains, gently jitter ±~3.5% each
+// second to suggest live activity. Isolated so only this cell re-renders.
+const LiveTps = React.memo(function LiveTps({ value }) {
+  const [shown, setShown] = React.useState(value)
+  React.useEffect(() => {
+    setShown(value)
+    if (!(value > 0)) return undefined
+    const id = setInterval(() => {
+      setShown(value * (1 + (Math.random() - 0.5) * 0.07))
+    }, 1000)
+    return () => clearInterval(id)
+  }, [value])
+  if (value == null) return '—'
+  if (!(value > 0)) return fmtTps(0)
+  return '~' + fmtTps(shown)
+})
+
 export function Console() {
   // SWR: poll the fleet every POLL_MS, revalidate on window focus, and keep the
   // previous data visible while refetching (no flicker / no splash on refresh).
@@ -315,6 +334,7 @@ export function Console() {
             </span>
             <span style={col(146)}><Tip underline w={250} label={HEADERS.rpc}>rpc.uptime</Tip></span>
             <span style={col(78, 'right')}><Tip underline w={250} label={HEADERS.lat}>lat</Tip></span>
+            <span style={col(70, 'right')}><Tip underline w={290} label={HEADERS.tps}>tps</Tip></span>
             <span style={col(116, 'right')}><Tip underline w={280} label={HEADERS.tvl}>bridged tvl</Tip></span>
             <span style={col(104, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending</Tip></span>
             <span style={col(74, 'right')}><Tip underline w={250} label={HEADERS.batch}>batch</Tip></span>
@@ -377,6 +397,13 @@ export function Console() {
                 </span>
                 <span style={{ ...col(78, 'right'), color: c.rpc.latency == null ? C.com : c.rpc.latency > 350 ? C.warn : C.com }}>
                   {c.rpc.latency == null ? 'n/a' : c.rpc.latency + 'ms'}
+                </span>
+                <span style={{ ...col(70, 'right'), color: c.tps == null ? C.com : c.tps > 0 ? C.num : C.com }}>
+                  {c.tps == null
+                    ? '—'
+                    : <Tip w={300} label={<><b style={{ color: '#fff' }}>Estimate.</b> Transactions/sec on the chain itself, sampled over the last ~20 of its own blocks each worker cycle (read live from the chain's RPC — not indexed, zero indexer overhead). The <code>~</code> denotes an estimate; the digits jitter slightly to reflect live activity.</>}>
+                        <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}><LiveTps value={c.tps} /></span>
+                      </Tip>}
                 </span>
                 <span style={{ ...col(116, 'right'), color: c.bridge.tvlUsd != null ? C.num : c.bridge.balanceNative != null ? C.flag : C.com }}>
                   {c.bridge.tvlUsd != null
