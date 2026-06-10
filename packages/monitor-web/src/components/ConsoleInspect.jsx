@@ -10,7 +10,7 @@ import * as F from '../fmt.js'
 import { full, relative, absolute } from '../time.js'
 import { fetchChainDetail, synthesizeAlerts, registerExplorersFromDetail } from '../api.js'
 import { whyBatch, whyAssertion, whyRetryable, whyRpc } from '../explainers.jsx'
-import { ChainLogo, UptimeBars } from './viz.jsx'
+import { ChainLogo, UptimeBars, BlinkCursor } from './viz.jsx'
 import { Tip, Ext } from './tooltip.jsx'
 
 const C = {
@@ -61,21 +61,16 @@ const Gap = ({ what }) => (
   </Tip>
 )
 
-export function ConsoleInspect({ chain, onClose }) {
-  const [cursor, setCursor] = React.useState(true)
+export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClose }) {
   const [detail, setDetail] = React.useState(null)
   const [error, setError] = React.useState(null)
 
   React.useEffect(() => {
-    const t = setInterval(() => setCursor(c => !c), 530)
     const onKey = e => {
       if (e.key === 'Escape') onClose()
     }
     window.addEventListener('keydown', onKey)
-    return () => {
-      clearInterval(t)
-      window.removeEventListener('keydown', onKey)
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
   React.useEffect(() => {
@@ -501,10 +496,10 @@ export function ConsoleInspect({ chain, onClose }) {
             <span style={{ color: C.com }}>:</span>
             <span style={{ color: C.fn }}>~/fleet</span>
             <span style={{ color: C.com }}>$ </span>
-            <span style={{ display: 'inline-block', width: 8, height: 14, background: cursor ? C.str : 'transparent', verticalAlign: 'text-bottom', transform: 'translateY(2px)' }} />
+            <BlinkCursor color={C.str} h={14} />
           </div>
         </div>
       </div>
     </div>
   )
-}
+})

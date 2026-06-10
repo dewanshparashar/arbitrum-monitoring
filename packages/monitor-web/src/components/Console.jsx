@@ -8,6 +8,7 @@ import * as F from '../fmt.js'
 import { full, relative, absolute } from '../time.js'
 import { fetchFleet } from '../api.js'
 import { Tip } from './tooltip.jsx'
+import { BlinkCursor } from './viz.jsx'
 import { ConsoleInspect } from './ConsoleInspect.jsx'
 import { Legend, HEADERS, whyOverall, whyIndexing } from '../explainers.jsx'
 
@@ -81,19 +82,21 @@ export function Console() {
   const [fetchedAt, setFetchedAt] = React.useState(null)
   const [status, setStatus] = React.useState('loading')
   const [error, setError] = React.useState(null)
-  const [cursor, setCursor] = React.useState(true)
   const [selected, setSelected] = React.useState(null)
   const [showLegend, setShowLegend] = React.useState(false)
   const [frame, setFrame] = React.useState(0)
 
+  const closeInspect = React.useCallback(() => setSelected(null), [])
+  const closeLegend = React.useCallback(() => setShowLegend(false), [])
+
+  // Spinner only animates during the initial splash — never while the table
+  // (and any open tooltip/inspector) is mounted.
+  const splashing = status === 'loading' && chains.length === 0
   React.useEffect(() => {
-    const t = setInterval(() => setCursor(c => !c), 530)
+    if (!splashing) return undefined
     const s = setInterval(() => setFrame(f => (f + 1) % SPINNER.length), 90)
-    return () => {
-      clearInterval(t)
-      clearInterval(s)
-    }
-  }, [])
+    return () => clearInterval(s)
+  }, [splashing])
 
   React.useEffect(() => {
     let live = true
@@ -181,7 +184,7 @@ export function Console() {
 
       {/* terminal body */}
       <div style={{ padding: '16px 18px 6px', flex: 1, ...mono, color: C.txt, overflowX: 'auto' }}>
-        {status === 'loading' && chains.length === 0 ? (
+        {splashing ? (
           <Splash frame={frame} error={null} />
         ) : (
         <div style={{ minWidth: 1020 }}>
@@ -326,7 +329,7 @@ export function Console() {
             <span style={{ color: C.com }}>:</span>
             <span style={{ color: C.fn }}>~/fleet</span>
             <span style={{ color: C.com }}>$ </span>
-            <span style={{ display: 'inline-block', width: 8, height: 15, background: cursor ? C.str : 'transparent', verticalAlign: 'text-bottom', transform: 'translateY(2px)' }} />
+            <BlinkCursor color={C.str} />
           </div>
         </div>
         )}
@@ -351,8 +354,8 @@ export function Console() {
         </span>
       </div>
 
-      {selected && <ConsoleInspect chain={selected} onClose={() => setSelected(null)} />}
-      {showLegend && <Legend onClose={() => setShowLegend(false)} />}
+      {selected && <ConsoleInspect chain={selected} onClose={closeInspect} />}
+      {showLegend && <Legend onClose={closeLegend} />}
     </div>
   )
 }

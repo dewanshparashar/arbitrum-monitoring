@@ -6,6 +6,19 @@ import React from 'react'
 import { Tip } from './tooltip.jsx'
 import { absolute } from '../time.js'
 
+// Self-contained blinking terminal cursor. Owns its own interval so the
+// blink never re-renders the parent (which would thrash open tooltips).
+export function BlinkCursor({ color = '#3DD68C', h = 15 }) {
+  const [on, setOn] = React.useState(true)
+  React.useEffect(() => {
+    const t = setInterval(() => setOn(o => !o), 530)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <span style={{ display: 'inline-block', width: 8, height: h, background: on ? color : 'transparent', verticalAlign: 'text-bottom', transform: 'translateY(2px)' }} />
+  )
+}
+
 // Chain logo badge — colored rounded square with initial
 export function ChainLogo({ chain, size = 30 }) {
   const initial = chain.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 1).toUpperCase()

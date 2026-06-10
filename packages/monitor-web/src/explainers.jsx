@@ -233,7 +233,7 @@ const Section = ({ title, accent = COL.fn, children }) => (
 )
 const Th = ({ st, children }) => <span style={{ color: COL[st], fontWeight: 600 }}>{children}</span>
 
-export function Legend({ onClose }) {
+export const Legend = React.memo(function Legend({ onClose }) {
   React.useEffect(() => {
     const onKey = e => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
@@ -310,4 +310,4 @@ export function Legend({ onClose }) {
       </div>
     </div>
   )
-}
+})
