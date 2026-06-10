@@ -111,9 +111,12 @@ A pass over the worker (`monitor-metrics`) and the API's derivations:
   decimals)`) and the UI shows the native amount + symbol, with **USD only
   where a price feed exists for that token** — otherwise an honest `n/a` USD
   with the native amount shown. **Part B (per-token USD pricing) is the
-  remaining gap:** there's no universal oracle for arbitrary gas tokens, so
-  custom-gas-token TVL is currently native-denominated only. Fleet-wide
-  `totalTvlUsd` therefore reflects priced (ETH) chains only.
+  remaining gap (now partially closed):** the worker prices custom gas tokens
+  via CoinGecko `simple/token_price` (by the token's contract address on its
+  parent platform — ethereum / arbitrum-one / base), stored under the same
+  `asset_key` as the balance, so USD lights up automatically wherever CoinGecko
+  lists the token. Tokens CoinGecko doesn't index stay native-denominated. So
+  custom-gas-token TVL is USD where a feed exists, native otherwise.
 - **Balance ↔ block consistency.** Balances are now read *at the recorded block*
   (`eth_getBalance(addr, <block>)`) instead of `'latest'`, so `balance_wei` and
   `block_number` always refer to the same block (the head could advance between

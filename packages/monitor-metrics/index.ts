@@ -596,6 +596,57 @@ const syncEthereumPrice = async (db: MetricsDb) => {
   })
 }
 
+// CoinGecko asset-platform id per parent chain (where the gas-token ERC-20 lives)
+const COINGECKO_PLATFORM: Record<number, string> = {
+  1: 'ethereum',
+  8453: 'base',
+  42161: 'arbitrum-one',
+}
+
+// Batch USD prices for ERC-20s by contract address on one platform.
+const fetchTokenPricesUsd = async (platform: string, addresses: string[]) => {
+  if (!addresses.length) return {} as Record<string, { usd?: number }>
+  const url = `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${addresses.join(
+    ','
+  )}&vs_currencies=usd`
+  return readJson<Record<string, { usd?: number }>>(url)
+}
+
+// Prices each chain's custom gas token (ERC-20 on the parent) via CoinGecko,
+// stored under the SAME asset_key syncBalances uses so the API join lights up
+// USD automatically. Best-effort: tokens CoinGecko doesn't list stay native-only.
+const syncTokenPrices = async (db: MetricsDb) => {
+  const checkedAt = new Date().toISOString()
+  const byPlatform = new Map<string, Array<{ address: string; assetKey: string }>>()
+
+  for (const chain of getMainnetChains()) {
+    if (!isCustomGasToken(chain.nativeToken)) continue
+    const platform = COINGECKO_PLATFORM[chain.parentChainId]
+    if (!platform) continue
+    const address = (chain.nativeToken as string).toLowerCase()
+    const assetKey = chain.nativeTokenSymbol || address
+    const list = byPlatform.get(platform) ?? []
+    list.push({ address, assetKey })
+    byPlatform.set(platform, list)
+  }
+
+  for (const [platform, tokens] of byPlatform) {
+    // per-platform isolation so one platform's failure/429 doesn't drop the rest
+    try {
+      const prices = await fetchTokenPricesUsd(platform, tokens.map(t => t.address))
+      for (const t of tokens) {
+        const usd = prices[t.address]?.usd
+        if (typeof usd !== 'number' || !Number.isFinite(usd) || usd <= 0 || usd > PRICE_SANITY_CEILING_USD) {
+          continue
+        }
+        await db.insertPrice({ assetKey: t.assetKey, priceUsd: usd, checkedAt })
+      }
+    } catch (error) {
+      console.error(`token price fetch failed for platform ${platform}`, error)
+    }
+  }
+}
+
 const syncChildExitLogs = async ({
   db,
   chain,
@@ -959,7 +1010,10 @@ const runCycle = async (db: MetricsDb, chunkSize: number) => {
 
   await stage('rpc checks', () => syncRpcChecks(db))
   await stage('balance sync', () => syncBalances(db))
-  await stage('price sync', () => syncEthereumPrice(db))
+  await stage('price sync', async () => {
+    await syncEthereumPrice(db)
+    await syncTokenPrices(db)
+  })
   await stage('chain runtime', () => syncChainRuntime(db))
   await stage('parent heads', () => syncParentHeads(db))
   await stage('exit sync', () => syncExitMessages(db, chunkSize))
