@@ -122,6 +122,7 @@ type FleetChain = {
   expiredRetryableCount: number
   rpcScore: number | null
   rpcChecks8d: number
+  rpcHistory: Array<{ pct: number | null; p50: number | null } | null> | null
   lastRpcCheckedAt: number | null
   latencyMs: number | null
   raasProvider: string | null
@@ -155,6 +156,16 @@ type FleetChain = {
 const PRICE_SOURCE = 'coingecko'
 // number of bars the inspector's RPC uptime strip is bucketed into
 const RPC_HISTORY_BUCKETS = 40
+// number of bars in the compact table sparkline (preview of the inspector strip)
+const RPC_PREVIEW_BUCKETS = 12
+
+type RpcHistoryRow = {
+  chain_id: number
+  bucket: number
+  total: number
+  ok: number
+  p50: number | null
+}
 
 // RaaS / infra provider inferred from the chain's public RPC host. Best-effort:
 // many chains use vanity domains and can't be attributed (→ null).
@@ -482,7 +493,7 @@ export class FleetDb {
 
   async readFleetChains(): Promise<FleetChain[]> {
     const nowSeconds = Math.floor(Date.now() / 1000)
-    const [batchRows, assertionRows, retryableRows, rpcRows, balanceRows, priceRows, exitRows, runtimeRows] =
+    const [batchRows, assertionRows, retryableRows, rpcRows, balanceRows, priceRows, exitRows, runtimeRows, rpcHistRows] =
       await Promise.all([
         this.pool.query<BatchSummaryRow>(`
           select distinct on (chain_id)
@@ -605,12 +616,51 @@ export class FleetDb {
             cast(extract(epoch from checked_at) as bigint) as checked_at
           from ${this.chainRuntimeTable}
         `),
+        // coarse per-chain probe history for the table sparkline — each chain's
+        // probes over its own [first probe, now] range bucketed into N bars,
+        // with uptime + p50 latency per bar. A preview of the inspector chart.
+        this.queryOptional<RpcHistoryRow>(`
+          with windowed as (
+            select
+              chain_id, ok, latency_ms,
+              extract(epoch from checked_at) as ts,
+              min(extract(epoch from checked_at)) over (partition by chain_id) as lo
+            from ${this.rpcChecksTable}
+            where checked_at >= now() - interval '8 days'
+          )
+          select
+            chain_id,
+            width_bucket(ts, lo, extract(epoch from now()) + 1, ${RPC_PREVIEW_BUCKETS}) as bucket,
+            count(*)::int as total,
+            count(*) filter (where ok)::int as ok,
+            cast(round(percentile_cont(0.5) within group (order by latency_ms)
+                 filter (where ok and latency_ms is not null)) as int) as p50
+          from windowed
+          group by chain_id, bucket
+          order by chain_id, bucket
+        `),
       ])
 
     const batchByChainId = byChainId(batchRows.rows)
     const assertionByChainId = byChainId(assertionRows.rows)
     const retryableByChainId = byChainId(retryableRows.rows)
     const rpcByChainId = byChainId(rpcRows.rows)
+    // group the bucketed history into a fixed-length array per chain
+    const rpcHistByChainId = new Map<number, Array<{ pct: number | null; p50: number | null } | null>>()
+    for (const row of rpcHistRows.rows) {
+      const cid = Number(row.chain_id)
+      let arr = rpcHistByChainId.get(cid)
+      if (!arr) {
+        arr = Array(RPC_PREVIEW_BUCKETS).fill(null)
+        rpcHistByChainId.set(cid, arr)
+      }
+      const idx = Math.max(0, Math.min(RPC_PREVIEW_BUCKETS - 1, Number(row.bucket) - 1))
+      const total = Number(row.total) || 0
+      arr[idx] = {
+        pct: total ? (Number(row.ok) / total) * 100 : null,
+        p50: row.p50 != null ? Number(row.p50) : null,
+      }
+    }
     const balanceByChainId = byChainId(balanceRows.rows)
     const exitByChainId = byChainId(exitRows.rows)
     const runtimeByChainId = byChainId(runtimeRows.rows)
@@ -685,6 +735,7 @@ export class FleetDb {
           expiredRetryableCount: parseCount(retryable?.expired_count),
           rpcScore: rpcChecks8d ? (okRpcChecks8d / rpcChecks8d) * 100 : null,
           rpcChecks8d,
+          rpcHistory: rpcHistByChainId.get(chain.chainId) ?? null,
           lastRpcCheckedAt: rpc?.last_checked_at ?? null,
           latencyMs: rpc?.latency_ms ?? null,
           raasProvider: inferRaasProvider(chain.rpcUrl),

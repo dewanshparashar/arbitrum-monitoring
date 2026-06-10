@@ -139,6 +139,7 @@ export const toViewChain = c => {
       status: rpcStatus(c.rpcScore, c.latencyMs),
       uptimePct: c.rpcScore, // % over the indexer window (8d)
       windowDays: 8,
+      history: c.rpcHistory ?? null, // coarse bucket series for the mini sparkline
       latency: c.latencyMs, // ms, or null if no successful probe
       checks: c.rpcChecks8d || 0,
       lastCheckedAt: c.lastRpcCheckedAt,

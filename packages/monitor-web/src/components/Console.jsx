@@ -62,6 +62,34 @@ const LiveTps = React.memo(function LiveTps({ value }) {
   return '~' + fmtTps(shown)
 })
 
+// Mini RPC sparkline for the table: bar height ∝ inverse latency (faster =
+// taller), color ∝ uptime per bucket. A compact preview of the inspector chart.
+const MiniUptime = React.memo(function MiniUptime({ history }) {
+  if (!history || !history.length) {
+    return <span style={{ display: 'inline-block', width: 80, height: 2, background: 'rgba(255,255,255,0.08)', borderRadius: 1, verticalAlign: 'middle' }} />
+  }
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 1.5, height: 14, width: 80, verticalAlign: 'middle' }}>
+      {history.map((b, i) => {
+        if (!b || b.pct == null) {
+          return <span key={i} style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.09)', borderRadius: 1 }} />
+        }
+        const color = b.pct < 95 ? C.crit : b.pct < 99.5 || (b.p50 != null && b.p50 > 350) ? C.warn : C.str
+        const lat = b.p50 == null ? 250 : b.p50
+        const h = Math.max(0.2, Math.min(1, 1 - lat / 1200)) // faster → taller
+        const title = `${b.pct.toFixed(1)}% up${b.p50 != null ? ` · p50 ${b.p50}ms` : ''}`
+        return (
+          <span
+            key={i}
+            title={title}
+            style={{ flex: 1, height: Math.round(h * 100) + '%', minHeight: 2, background: color, borderRadius: 1, opacity: color === C.str ? 0.7 : 0.95 }}
+          />
+        )
+      })}
+    </span>
+  )
+})
+
 const PARENT_ABBR = { Ethereum: 'eth', Base: 'base', 'Arbitrum One': 'arb' }
 
 // Compact indexer/worker freshness for the bottom status bar (white-on-blue).
@@ -368,10 +396,8 @@ export function Console() {
                     <span style={{ color: stColor[m.A] }}>●</span>
                   </Tip>
                 </span>
-                <span style={col(146)}>
-                  <span style={{ color: upColor, letterSpacing: '0px', marginRight: 8 }}>
-                    {c.rpc.uptimePct == null ? '·········' : '▁'.repeat(11)}
-                  </span>
+                <span style={{ ...col(146), display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <MiniUptime history={c.rpc.history} />
                   <span style={{ color: upColor }}>{c.rpc.uptimePct == null ? 'no data' : c.rpc.uptimePct.toFixed(2) + '%'}</span>
                 </span>
                 <span style={{ ...col(78, 'right'), color: c.rpc.latency == null ? C.com : c.rpc.latency > 350 ? C.warn : C.com }}>
