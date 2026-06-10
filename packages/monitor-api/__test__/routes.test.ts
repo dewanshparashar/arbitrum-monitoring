@@ -26,6 +26,12 @@ const createFleetDb = () => ({
         }
       : null
   ),
+  readFleetStatus: vi.fn(async () => ({
+    worker: { status: 'ok' },
+    indexer: { parents: [] },
+    freshness: { rpc: 1, balance: 2, price: 3 },
+    exitBacklog: [],
+  })),
 })
 
 describe('handleApiRequest', () => {
@@ -52,7 +58,14 @@ describe('handleApiRequest', () => {
       pathname: '/api/fleet/chains/42161',
       fleetDb,
     })
+    const status = await handleApiRequest({
+      method: 'GET',
+      pathname: '/api/fleet/status',
+      fleetDb,
+    })
 
+    expect(status.status).toBe(200)
+    expect(status.body).toMatchObject({ worker: { status: 'ok' } })
     expect(health.status).toBe(200)
     expect(health.body).toMatchObject({
       ok: true,

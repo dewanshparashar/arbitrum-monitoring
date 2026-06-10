@@ -309,13 +309,16 @@ const checkToUptimeValue = row => {
 
 // ---- public fetchers ----
 export const fetchFleet = async () => {
-  const [overview, chains] = await Promise.all([
+  const [overview, chains, status] = await Promise.all([
     apiFetch('/api/fleet/overview'),
     apiFetch('/api/fleet/chains'),
+    // resilient: fleet still loads if the status route isn't deployed yet
+    apiFetch('/api/fleet/status').catch(() => null),
   ])
   return {
     overview,
     chains: chains.map(toViewChain),
+    status,
     fetchedAt: Math.floor(Date.now() / 1000), // client clock, browser TZ
   }
 }

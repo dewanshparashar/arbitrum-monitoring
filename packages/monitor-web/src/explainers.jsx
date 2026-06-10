@@ -158,6 +158,56 @@ export const whyOverall = c => (
   </span>
 )
 
+// ---- indexing pipeline status ----
+export const whyIndexing = status => {
+  if (!status) {
+    return <span>Pipeline status endpoint not available (older API deploy). The fleet data above is still live.</span>
+  }
+  const w = status.worker
+  return (
+    <span>
+      <Head>indexing pipeline</Head>
+      <div style={{ marginTop: 4 }}>
+        <b style={{ color: COL.fn }}>Indexer</b> (Ponder, on the VPS) ingests parent-chain events into Postgres. Freshness below = age of the newest indexed event per parent chain (a tight proxy on active chains; batches post every few minutes).
+      </div>
+      {status.indexer?.parents?.length ? (
+        <div style={{ marginTop: 4 }}>
+          {status.indexer.parents.map(p => (
+            <div key={p.parentChainId} style={{ color: COL.com }}>
+              {p.parentChainName}: latest event{' '}
+              <span style={{ color: p.lagSeconds != null && p.lagSeconds < 600 ? COL.ok : COL.warn }}>
+                {p.lagSeconds != null ? F.dur(p.lagSeconds / 60) + ' ago' : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div style={{ marginTop: 6 }}>
+        <b style={{ color: COL.fn }}>Worker</b> (monitor-metrics) probes RPCs, snapshots balances/prices, and indexes exit messages each cycle.
+        {w ? (
+          <div style={{ color: COL.com }}>
+            last cycle <span style={{ color: w.status === 'ok' ? COL.ok : COL.crit }}>{w.status}</span>
+            {w.durationMs != null ? ` in ${(w.durationMs / 1000).toFixed(1)}s` : ''}
+            {w.stateUpdatedAt ? <>, <span style={{ color: COL.com }}>{full(w.stateUpdatedAt)}</span></> : ''}
+          </div>
+        ) : (
+          <div style={{ color: COL.com }}>no worker heartbeat yet (worker pending redeploy).</div>
+        )}
+      </div>
+      {status.exitBacklog?.length ? (
+        <div style={{ marginTop: 6 }}>
+          <b style={{ color: COL.fn }}>Exit backlog</b> (child blocks pending exit-log scan):
+          {status.exitBacklog.slice(0, 6).map(b => (
+            <div key={b.chainId} style={{ color: COL.com }}>
+              {b.chainSlug}: <span style={{ color: b.lagBlocks > 0 ? COL.warn : COL.ok }}>{F.num(b.lagBlocks)} blocks</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </span>
+  )
+}
+
 // ---- static reference content for column headers ----
 export const HEADERS = {
   chain: 'The Orbit / Arbitrum chain being monitored. Click any row to inspect it.',

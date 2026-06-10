@@ -272,6 +272,7 @@ export class FleetDb {
   private readonly balanceSnapshotsTable: string
   private readonly pricesTable: string
   private readonly exitsTable: string
+  private readonly workerStateTable: string
 
   constructor(connectionString: string, schemaName = process.env.DATABASE_SCHEMA) {
     const schema = normalizeSchemaName(schemaName)
@@ -286,6 +287,7 @@ export class FleetDb {
     this.balanceSnapshotsTable = tableName(schema, 'native_balance_snapshots')
     this.pricesTable = tableName(schema, 'asset_prices')
     this.exitsTable = tableName(schema, 'exit_messages')
+    this.workerStateTable = tableName(schema, 'metric_worker_state')
   }
 
   async healthCheck() {
@@ -638,6 +640,70 @@ export class FleetDb {
       recentRetryables: retryableRows.rows,
       recentRpcChecks: rpcRows.rows,
       pendingExits: exitRows.rows,
+    }
+  }
+
+  // Pipeline health: worker heartbeat, indexer freshness, and exit backlog.
+  // Indexer freshness is derived from the newest indexed parent-chain event
+  // (version-independent), not Ponder's internal checkpoint tables.
+  async readFleetStatus() {
+    const [workerState, indexerRows, rpcFresh, balanceFresh, priceFresh] =
+      await Promise.all([
+        this.queryOptional<{ key: string; value: string; updated_at_epoch: number | null }>(`
+          select key, value, cast(extract(epoch from updated_at) as bigint) as updated_at_epoch
+          from ${this.workerStateTable}
+          where key in ('worker_heartbeat', 'exit_backlog')
+        `),
+        this.queryOptional<{ parent_chain_id: number; parent_chain_name: string; latest: number | null }>(`
+          select parent_chain_id, parent_chain_name, max(parent_block_timestamp) as latest
+          from (
+            select parent_chain_id, parent_chain_name, parent_block_timestamp from ${this.batchDeliveriesTable}
+            union all
+            select parent_chain_id, parent_chain_name, parent_block_timestamp from ${this.assertionEventsTable}
+            union all
+            select parent_chain_id, parent_chain_name, parent_block_timestamp from ${this.retryableTicketsTable}
+          ) events
+          group by parent_chain_id, parent_chain_name
+        `),
+        this.queryOptional<{ latest: number | null }>(`select cast(extract(epoch from max(checked_at)) as bigint) as latest from ${this.rpcChecksTable}`),
+        this.queryOptional<{ latest: number | null }>(`select cast(extract(epoch from max(checked_at)) as bigint) as latest from ${this.balanceSnapshotsTable}`),
+        this.queryOptional<{ latest: number | null }>(`select cast(extract(epoch from max(checked_at)) as bigint) as latest from ${this.pricesTable}`),
+      ])
+
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    const stateByKey = new Map(workerState.rows.map(row => [row.key, row]))
+    const parseJson = (raw: string | undefined) => {
+      if (!raw) return null
+      try {
+        return JSON.parse(raw)
+      } catch {
+        return null
+      }
+    }
+
+    const heartbeat = parseJson(stateByKey.get('worker_heartbeat')?.value)
+
+    return {
+      generatedAt: new Date().toISOString(),
+      worker: heartbeat
+        ? { ...heartbeat, stateUpdatedAt: stateByKey.get('worker_heartbeat')?.updated_at_epoch ?? null }
+        : null,
+      indexer: {
+        parents: indexerRows.rows
+          .map(row => ({
+            parentChainId: Number(row.parent_chain_id),
+            parentChainName: row.parent_chain_name,
+            latestEventAt: row.latest ?? null,
+            lagSeconds: row.latest != null ? Math.max(nowSeconds - Number(row.latest), 0) : null,
+          }))
+          .sort((left, right) => left.parentChainId - right.parentChainId),
+      },
+      freshness: {
+        rpc: rpcFresh.rows[0]?.latest ?? null,
+        balance: balanceFresh.rows[0]?.latest ?? null,
+        price: priceFresh.rows[0]?.latest ?? null,
+      },
+      exitBacklog: parseJson(stateByKey.get('exit_backlog')?.value) ?? [],
     }
   }
 

@@ -9,7 +9,7 @@ import { full, relative, absolute } from '../time.js'
 import { fetchFleet } from '../api.js'
 import { Tip } from './tooltip.jsx'
 import { ConsoleInspect } from './ConsoleInspect.jsx'
-import { Legend, HEADERS, whyOverall } from '../explainers.jsx'
+import { Legend, HEADERS, whyOverall, whyIndexing } from '../explainers.jsx'
 
 const C = {
   kw: '#C792EA',
@@ -77,6 +77,7 @@ const heartbeatChar = v =>
 export function Console() {
   const [chains, setChains] = React.useState([])
   const [overview, setOverview] = React.useState(null)
+  const [statusInfo, setStatusInfo] = React.useState(null)
   const [fetchedAt, setFetchedAt] = React.useState(null)
   const [status, setStatus] = React.useState('loading')
   const [error, setError] = React.useState(null)
@@ -98,10 +99,11 @@ export function Console() {
     let live = true
     const load = async () => {
       try {
-        const { overview, chains, fetchedAt } = await fetchFleet()
+        const { overview, chains, status, fetchedAt } = await fetchFleet()
         if (!live) return
         setOverview(overview)
         setChains(chains)
+        setStatusInfo(status)
         setFetchedAt(fetchedAt)
         setStatus('ok')
         setError(null)
@@ -214,6 +216,28 @@ export function Console() {
                   fetched <Tip label={full(fetchedAt)}><span style={{ color: C.num }}>{fetchedAt ? relative(fetchedAt) : '—'}</span></Tip> ·{' '}
                   <span style={{ color: C.str }}>{fleet.ok} ok</span> <span style={{ color: C.warn }}>{fleet.warn} warn</span>{' '}
                   <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
+                </div>
+                <div style={{ color: C.com }}>
+                  → <Tip w={320} label={whyIndexing(statusInfo)}><span style={{ borderBottom: '1px dotted rgba(255,255,255,0.2)' }}>index.status</span></Tip>:{' '}
+                  {statusInfo?.indexer?.parents?.length ? (
+                    statusInfo.indexer.parents.map((p, i) => (
+                      <span key={p.parentChainId}>
+                        {i ? ' · ' : ''}
+                        <span style={{ color: C.fn }}>{p.parentChainName.toLowerCase().replace(/\s+/g, '-')}</span>{' '}
+                        <span style={{ color: p.lagSeconds != null && p.lagSeconds < 600 ? C.str : C.warn }}>{p.latestEventAt ? relative(p.latestEventAt) : '—'}</span>
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ color: C.com }}>indexer freshness unavailable</span>
+                  )}
+                  {' · worker '}
+                  {statusInfo?.worker ? (
+                    <span style={{ color: statusInfo.worker.status === 'ok' ? C.str : C.crit }}>
+                      {statusInfo.worker.status === 'ok' ? '✓' : '✖'} {statusInfo.worker.stateUpdatedAt ? relative(statusInfo.worker.stateUpdatedAt) : '—'}
+                    </span>
+                  ) : (
+                    <span style={{ color: C.com }}>pending</span>
+                  )}
                 </div>
               </>
             )}

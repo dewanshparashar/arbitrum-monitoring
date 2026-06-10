@@ -11,6 +11,7 @@ const fleetDb = {
   }),
   readFleetChains: async () => [],
   readFleetChainDetail: async () => null,
+  readFleetStatus: async () => ({ worker: null, indexer: { parents: [] }, freshness: {}, exitBacklog: [] }),
 }
 
 describe('handleVercelRequest', () => {

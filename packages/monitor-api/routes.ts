@@ -8,6 +8,7 @@ export interface FleetDbLike {
   readFleetOverview: () => Promise<unknown>
   readFleetChains: () => Promise<unknown>
   readFleetChainDetail: (chainId: number) => Promise<unknown>
+  readFleetStatus: () => Promise<unknown>
 }
 
 const ok = (body: unknown): ApiResponse => ({
@@ -51,6 +52,11 @@ export const handleApiRequest = async ({
   if (pathname === '/api/fleet/chains') {
     if (!fleetDb) return badRequest('Fleet indexer database is unavailable.')
     return ok(await fleetDb.readFleetChains())
+  }
+
+  if (pathname === '/api/fleet/status') {
+    if (!fleetDb) return badRequest('Fleet indexer database is unavailable.')
+    return ok(await fleetDb.readFleetStatus())
   }
 
   const fleetChainMatch = pathname.match(/^\/api\/fleet\/chains\/([^/]+)$/)

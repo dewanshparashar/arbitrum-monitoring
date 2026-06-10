@@ -391,6 +391,7 @@ const syncChildExitLogs = async ({
     rpcUrl: chain.rpcUrl,
     fallbackSeconds: oldestSeconds,
   })
+  const cursorStart = fromBlock
   const latestBlock = await getBlockNumber(chain.rpcUrl)
 
   while (fromBlock <= latestBlock) {
@@ -425,6 +426,14 @@ const syncChildExitLogs = async ({
 
     fromBlock = endBlock + 1n
     await db.setState(stateKey, fromBlock.toString())
+  }
+
+  return {
+    chainId: chain.chainId,
+    chainSlug: chain.slug,
+    headBlock: Number(latestBlock),
+    cursorBlock: Number(cursorStart),
+    lagBlocks: Math.max(0, Number(latestBlock - cursorStart)),
   }
 }
 
@@ -489,14 +498,22 @@ const syncParentExitExecutions = async ({
 
 const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
   const oldestSeconds = Math.floor(Date.now() / 1000) - eightDaysSeconds
+  const backlog: unknown[] = []
 
   for (const chain of getMainnetChains()) {
     try {
-      await syncChildExitLogs({ db, chain, chunkSize, oldestSeconds })
+      const info = await syncChildExitLogs({ db, chain, chunkSize, oldestSeconds })
+      if (info) backlog.push(info)
       await syncParentExitExecutions({ db, chain, chunkSize, oldestSeconds })
     } catch (error) {
       console.error(`exit sync failed for ${chain.slug}`, error)
     }
+  }
+
+  try {
+    await db.setState('exit_backlog', JSON.stringify(backlog))
+  } catch (error) {
+    console.error('failed to record exit backlog', error)
   }
 }
 
@@ -539,12 +556,31 @@ export const main = async () => {
 
   while (true) {
     const startedAt = Date.now()
+    const heartbeat = async (status: 'ok' | 'error', error?: unknown) => {
+      try {
+        await db.setState(
+          'worker_heartbeat',
+          JSON.stringify({
+            startedAt: Math.floor(startedAt / 1000),
+            finishedAt: Math.floor(Date.now() / 1000),
+            durationMs: Date.now() - startedAt,
+            intervalSeconds: Math.round(intervalMs / 1000),
+            status,
+            ...(error ? { error: error instanceof Error ? error.message : String(error) } : {}),
+          })
+        )
+      } catch (stateError) {
+        console.error('failed to write worker heartbeat', stateError)
+      }
+    }
 
     try {
       await runCycle(db, Math.max(options.logChunkSize, 100))
       console.log(`monitor-metrics cycle complete in ${Date.now() - startedAt}ms`)
+      await heartbeat('ok')
     } catch (error) {
       console.error('monitor-metrics cycle failed', error)
+      await heartbeat('error', error)
     }
 
     await sleep(intervalMs)
