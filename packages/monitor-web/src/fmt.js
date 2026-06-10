@@ -14,6 +14,20 @@ export const money = n => {
 
 export const num = n => (n == null ? '—' : n.toLocaleString('en-US'))
 
+// compact token amount with optional symbol, e.g. 1.2M XAI / 845K APE / 12.4 ETH
+export const compact = (n, sym) => {
+  if (n == null) return '—'
+  const abs = Math.abs(n)
+  let s
+  if (abs >= 1e9) s = (n / 1e9).toFixed(abs >= 1e10 ? 1 : 2) + 'B'
+  else if (abs >= 1e6) s = (n / 1e6).toFixed(1) + 'M'
+  else if (abs >= 1e3) s = Math.round(n / 1e3) + 'K'
+  else if (abs >= 1) s = n.toFixed(abs >= 100 ? 0 : 1)
+  else if (abs > 0) s = n.toPrecision(2)
+  else s = '0'
+  return sym ? s + ' ' + sym : s
+}
+
 // precise USD for unit prices (not abbreviated like money())
 export const price = n => {
   if (n == null) return '—'

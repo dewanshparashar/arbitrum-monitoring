@@ -250,8 +250,11 @@ export function Console() {
           <div style={{ color: C.com, borderBottom: '1px solid var(--hairline)', paddingBottom: 4, ...rowNoWrap }}>
             <Gutter n="#" />
             <span style={col(150)}><Tip underline w={250} label={HEADERS.chain}>chain</Tip></span>
+            <span style={col(96)}><Tip underline w={250} label={HEADERS.id}>chainId</Tip></span>
             <span style={col(118)}><Tip underline w={250} label={HEADERS.parent}>parent</Tip></span>
             <span style={col(96)}><Tip underline w={280} label={HEADERS.type}>type</Tip></span>
+            <span style={col(58)}><Tip underline w={250} label={HEADERS.native}>gas</Tip></span>
+            <span style={col(96)}><Tip underline w={300} label={HEADERS.arbos}>arbos</Tip></span>
             <span style={col(56, 'center')}>
               <Tip underline w={290} label={<span><b style={{ color: '#fff' }}>Monitor triad</b> — the alert decision tree.<br /><b style={{ color: '#82AAFF' }}>R</b> Retryable · cross-chain message health<br /><b style={{ color: '#82AAFF' }}>B</b> Batch poster · sequencer posting &amp; cadence<br /><b style={{ color: '#82AAFF' }}>A</b> Assertion · validator / confirmation health<br /><span style={{ color: 'var(--text-3)' }}>Hover a row's dots for that chain's verdict · click <b>? explain</b> for full rules.</span></span>}>r b a</Tip>
             </span>
@@ -284,8 +287,17 @@ export function Console() {
                   </Tip>
                   <span style={{ color: c.color }}>{c.id.length > 16 ? c.id.slice(0, 15) + '…' : c.id}</span>
                 </span>
+                <span style={{ ...col(96), color: C.num }}>{c.chainId}</span>
                 <span style={{ ...col(118), color: C.com }}>{c.parent}</span>
                 <span style={{ ...col(96), color: C.kw }}>{c.transport === 'AnyTrust' ? 'anytrust' : c.transport === 'Rollup' ? 'rollup' : '—'}{c.bold ? '+bold' : ''}</span>
+                <span style={{ ...col(58), color: c.isCustomGasToken ? C.flag : C.com }}>{c.native}</span>
+                <span style={{ ...col(96), color: c.arbos && c.arbos.version != null ? C.kw : C.com }}>
+                  {c.arbos && c.arbos.version != null
+                    ? <Tip w={280} label={<>ArbOS {c.arbos.version}{c.arbos.name ? ' (' + c.arbos.name + ')' : ''} · read on-chain via ArbSys.arbOSVersion() (raw {c.arbos.raw}, −55 offset).</>}>
+                        <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>{c.arbos.version}{c.arbos.name ? ' ' + c.arbos.name : ''}</span>
+                      </Tip>
+                    : '—'}
+                </span>
                 <span style={col(56, 'center')}>
                   <Tip w={230} label={<span><b style={{ color: stColor[m.R] }}>R</b>etryable: {m.R}<br /><b style={{ color: stColor[m.B] }}>B</b>atch poster: {m.B}<br /><b style={{ color: stColor[m.A] }}>A</b>ssertion: {m.A}</span>}>
                     <span style={{ color: stColor[m.R] }}>●</span>{' '}
@@ -302,7 +314,15 @@ export function Console() {
                 <span style={{ ...col(78, 'right'), color: c.rpc.latency == null ? C.com : c.rpc.latency > 350 ? C.warn : C.com }}>
                   {c.rpc.latency == null ? 'n/a' : c.rpc.latency + 'ms'}
                 </span>
-                <span style={{ ...col(78, 'right'), color: C.num }}>{c.bridge.tvlUsd == null ? '—' : F.money(c.bridge.tvlUsd)}</span>
+                <span style={{ ...col(78, 'right'), color: c.bridge.tvlUsd != null ? C.num : c.bridge.balanceNative != null ? C.flag : C.com }}>
+                  {c.bridge.tvlUsd != null
+                    ? F.money(c.bridge.tvlUsd)
+                    : c.bridge.balanceNative != null
+                      ? <Tip w={260} label={`Native bridged amount — no USD price feed for ${c.bridge.balanceAsset || c.native}, so the gas-token balance is shown instead of a dollar value.`}>
+                          <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>{F.compact(c.bridge.balanceNative, c.bridge.balanceAsset || c.native)}</span>
+                        </Tip>
+                      : '—'}
+                </span>
                 <span style={{ ...col(82, 'right'), color: C.txt }}>{c.bridge.pendingUsd == null ? '—' : F.money(c.bridge.pendingUsd)}</span>
                 <span style={{ ...col(74, 'right'), color: c.batch.lastMins != null && c.batch.lastMins > c.batch.targetMins * 2 ? C.crit : C.com }}>
                   {F.dur(c.batch.lastMins)}

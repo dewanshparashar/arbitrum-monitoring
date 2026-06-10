@@ -124,6 +124,8 @@ type FleetChain = {
   lastRpcCheckedAt: number | null
   latencyMs: number | null
   nativeAssetKey: string | null
+  gasTokenSymbol: string | null
+  gasTokenAddress: string | null
   nativeBalanceWei: string | null
   nativeAssetDecimals: number
   nativeAmount: number | null
@@ -601,6 +603,8 @@ export class FleetDb {
           lastRpcCheckedAt: rpc?.last_checked_at ?? null,
           latencyMs: rpc?.latency_ms ?? null,
           nativeAssetKey: balance?.asset_key ?? null,
+          gasTokenSymbol: chain.nativeTokenSymbol ?? null,
+          gasTokenAddress: chain.nativeToken ?? null,
           nativeBalanceWei: balance?.balance_wei ?? null,
           nativeAssetDecimals: balanceDecimals,
           nativeAmount: toNativeAmount(balance?.balance_wei, balanceDecimals),

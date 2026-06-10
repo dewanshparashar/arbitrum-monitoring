@@ -116,8 +116,11 @@ export const toViewChain = c => {
     transport, // 'Rollup' | 'AnyTrust' | 'Unknown'
     protocol, // 'BoLD' | 'Classic' | 'Unknown'
     bold,
-    native: assetLabel(c.nativeAssetKey),
+    // gas token: prefer the config symbol (always known), else the priced
+    // asset key, else ETH for native-ETH chains
+    native: c.gasTokenSymbol || (c.nativeAssetKey ? assetLabel(c.nativeAssetKey) : 'ETH'),
     nativeAssetKey: c.nativeAssetKey,
+    isCustomGasToken: !!c.gasTokenAddress,
     arbos: {
       version: c.arbosVersion ?? null,
       name: c.arbosName ?? null,

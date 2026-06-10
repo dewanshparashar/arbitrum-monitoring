@@ -211,9 +211,12 @@ export const whyIndexing = status => {
 // ---- static reference content for column headers ----
 export const HEADERS = {
   chain: 'The Orbit / Arbitrum chain being monitored. Click any row to inspect it.',
+  id: 'The chain\'s EIP-155 chain ID.',
+  native: 'The chain\'s native gas token. ETH for standard chains; a custom ERC-20 symbol (e.g. XAI, APE) for custom-gas-token chains — that token is what\'s locked in the bridge and measured for TVL.',
+  arbos: 'ArbOS version running on the chain, read on-chain via ArbSys.arbOSVersion() (with the documented −55 offset) and mapped to its release name (Atlas/Bianca/Callisto/Dia/Elara). — = the chain\'s RPC didn\'t answer the call.',
   parent: 'The settlement (parent) chain this chain posts its batches and assertions to.',
   type: 'Data availability + dispute protocol. rollup = tx data posted on-chain as calldata; anytrust = a Data Availability Committee (DAC) holds the data. +bold = BoLD permissionless dispute protocol (vs whitelisted "classic").',
-  tvl: 'ETH held in the chain\'s canonical bridge contract on the parent chain × ETH/USD price. This is bridge ETH, not the chain\'s gas-token TVL — open a chain to see the full derivation.',
+  tvl: 'Value of the native asset (ETH, or the chain\'s custom gas token) locked in the canonical bridge × its USD price. USD shows only where a price feed exists; custom gas tokens without a feed show n/a here and the native amount in the inspector.',
   pending: 'USD value in outbound (L2→L1) withdrawal messages that have left the chain but not yet been claimed on the parent chain.',
   batch: 'Time since the sequencer last posted a batch to the parent chain. Turns red past 4× the target interval.',
   retry: 'Open retryable (parent→child) tickets in the window. The trailing ·N! flags urgent ones (expiring within 2 days or already expired).',
