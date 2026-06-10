@@ -331,12 +331,6 @@ export function Console() {
                   <span style={{ color: C.str }}>{fleet.ok} ok</span> <span style={{ color: C.warn }}>{fleet.warn} warn</span>{' '}
                   <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
                 </div>
-                <div style={{ color: C.com }}>
-                  → indexer + worker freshness pinned in the status bar below{' '}
-                  <Tip w={320} label={whyIndexing(statusInfo)}>
-                    <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.2)' }}>↓</span>
-                  </Tip>
-                </div>
               </>
             )}
           </div>
