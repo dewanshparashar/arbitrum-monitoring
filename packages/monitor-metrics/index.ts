@@ -747,6 +747,31 @@ const syncChainRuntime = async (db: MetricsDb) => {
   )
 }
 
+// Records the live head block of each parent chain so the API can report how
+// far behind the indexer is (head block vs latest indexed block).
+const syncParentHeads = async (db: MetricsDb) => {
+  const parentRpcUrls = getParentRpcUrls()
+  const parents = Array.from(
+    new Set(getMainnetChains().map(chain => chain.parentChainId))
+  )
+  const heads: Record<number, { block: string; checkedAt: string }> = {}
+  await Promise.all(
+    parents.map(async parentChainId => {
+      try {
+        const rpcUrl = parentRpcUrls[parentChainId]
+        if (!rpcUrl) return
+        const head = await getBlockNumber(rpcUrl)
+        heads[parentChainId] = { block: head.toString(), checkedAt: new Date().toISOString() }
+      } catch (error) {
+        console.error(`parent head read failed for ${parentChainId}`, error)
+      }
+    })
+  )
+  if (Object.keys(heads).length) {
+    await db.setState('parent_heads', JSON.stringify(heads))
+  }
+}
+
 // Each stage is isolated so a failure in one (e.g. price API down) never
 // blocks the others (RPC probes, balances, exit indexing) from updating.
 // Failed stage names are collected so the heartbeat can report partial failure.
@@ -765,6 +790,7 @@ const runCycle = async (db: MetricsDb, chunkSize: number) => {
   await stage('balance sync', () => syncBalances(db))
   await stage('price sync', () => syncEthereumPrice(db))
   await stage('chain runtime', () => syncChainRuntime(db))
+  await stage('parent heads', () => syncParentHeads(db))
   await stage('exit sync', () => syncExitMessages(db, chunkSize))
   await stage('prune', () => db.prune())
 

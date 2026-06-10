@@ -742,16 +742,20 @@ export class FleetDb {
         this.queryOptional<{ key: string; value: string; updated_at_epoch: number | null }>(`
           select key, value, cast(extract(epoch from updated_at) as bigint) as updated_at_epoch
           from ${this.workerStateTable}
-          where key in ('worker_heartbeat', 'exit_backlog')
+          where key in ('worker_heartbeat', 'exit_backlog', 'parent_heads')
         `),
-        this.queryOptional<{ parent_chain_id: number; parent_chain_name: string; latest: number | null }>(`
-          select parent_chain_id, parent_chain_name, max(parent_block_timestamp) as latest
+        this.queryOptional<{ parent_chain_id: number; parent_chain_name: string; latest: number | null; latest_block: string | null }>(`
+          select
+            parent_chain_id,
+            parent_chain_name,
+            max(parent_block_timestamp) as latest,
+            max(parent_block_number)::text as latest_block
           from (
-            select parent_chain_id, parent_chain_name, parent_block_timestamp from ${this.batchDeliveriesTable}
+            select parent_chain_id, parent_chain_name, parent_block_timestamp, parent_block_number from ${this.batchDeliveriesTable}
             union all
-            select parent_chain_id, parent_chain_name, parent_block_timestamp from ${this.assertionEventsTable}
+            select parent_chain_id, parent_chain_name, parent_block_timestamp, parent_block_number from ${this.assertionEventsTable}
             union all
-            select parent_chain_id, parent_chain_name, parent_block_timestamp from ${this.retryableTicketsTable}
+            select parent_chain_id, parent_chain_name, parent_block_timestamp, parent_block_number from ${this.retryableTicketsTable}
           ) events
           group by parent_chain_id, parent_chain_name
         `),
@@ -772,6 +776,8 @@ export class FleetDb {
     }
 
     const heartbeat = parseJson(stateByKey.get('worker_heartbeat')?.value)
+    // worker-recorded live head per parent chain: { "<id>": { block, checkedAt } }
+    const parentHeads = parseJson(stateByKey.get('parent_heads')?.value) ?? {}
 
     return {
       generatedAt: new Date().toISOString(),
@@ -780,12 +786,27 @@ export class FleetDb {
         : null,
       indexer: {
         parents: indexerRows.rows
-          .map(row => ({
-            parentChainId: Number(row.parent_chain_id),
-            parentChainName: row.parent_chain_name,
-            latestEventAt: row.latest ?? null,
-            lagSeconds: row.latest != null ? Math.max(nowSeconds - Number(row.latest), 0) : null,
-          }))
+          .map(row => {
+            const head = parentHeads[String(row.parent_chain_id)]
+            const headBlock = head?.block ? Number(head.block) : null
+            // latest indexed *event* block (a lower bound on the cursor — tight
+            // on active parents where events are frequent)
+            const indexedBlock = row.latest_block != null ? Number(row.latest_block) : null
+            const behindBlocks =
+              headBlock != null && indexedBlock != null
+                ? Math.max(0, headBlock - indexedBlock)
+                : null
+            return {
+              parentChainId: Number(row.parent_chain_id),
+              parentChainName: row.parent_chain_name,
+              latestEventAt: row.latest ?? null,
+              lagSeconds: row.latest != null ? Math.max(nowSeconds - Number(row.latest), 0) : null,
+              indexedBlock,
+              headBlock,
+              headCheckedAt: head?.checkedAt ?? null,
+              behindBlocks,
+            }
+          })
           .sort((left, right) => left.parentChainId - right.parentChainId),
       },
       freshness: {

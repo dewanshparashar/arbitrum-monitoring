@@ -178,10 +178,18 @@ export const whyIndexing = status => {
               <span style={{ color: p.lagSeconds != null && p.lagSeconds < 600 ? COL.ok : COL.warn }}>
                 {p.lagSeconds != null ? F.dur(p.lagSeconds / 60) + ' ago' : '—'}
               </span>
+              {p.behindBlocks != null ? (
+                <span style={{ color: p.behindBlocks > 2000 ? COL.warn : COL.ok }}>
+                  {' '}· {p.behindBlocks === 0 ? 'at head' : `~${F.compact(p.behindBlocks)} blk behind`}
+                </span>
+              ) : null}
             </div>
           ))}
         </div>
       ) : null}
+      <div style={{ marginTop: 4, color: COL.com }}>
+        The <b>blk behind</b> figure compares the newest indexed event block to the chain head (recorded each worker cycle) — it shows whether the indexer is keeping up or catching up a backlog.
+      </div>
       <div style={{ marginTop: 6 }}>
         <b style={{ color: COL.fn }}>Worker</b> (monitor-metrics) probes RPCs, snapshots balances/prices, and indexes exit messages each cycle.
         {w ? (

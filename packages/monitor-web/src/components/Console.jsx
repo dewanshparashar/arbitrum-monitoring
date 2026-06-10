@@ -259,6 +259,29 @@ export function Console() {
                         {i ? ' · ' : ''}
                         <span style={{ color: C.fn }}>{p.parentChainName.toLowerCase().replace(/\s+/g, '-')}</span>{' '}
                         <span style={{ color: p.lagSeconds != null && p.lagSeconds < 600 ? C.str : C.warn }}>{p.latestEventAt ? relative(p.latestEventAt) : '—'}</span>
+                        {p.behindBlocks != null && p.headBlock != null ? (
+                          <Tip
+                            w={300}
+                            label={
+                              <span>
+                                indexed block <b style={{ color: '#fff' }}>{F.num(p.indexedBlock)}</b>
+                                <br />
+                                chain head <b style={{ color: '#fff' }}>{F.num(p.headBlock)}</b>
+                                {p.headCheckedAt ? <span style={{ color: 'var(--text-3)' }}> (read {relative(p.headCheckedAt)})</span> : null}
+                                <br />
+                                <span style={{ color: p.behindBlocks > 2000 ? '#F5B544' : '#3DD68C' }}>
+                                  {p.behindBlocks === 0 ? 'at head' : `~${F.compact(p.behindBlocks)} blocks behind`}
+                                </span>
+                                <br />
+                                <span style={{ color: 'var(--text-4)', fontSize: 11 }}>indexed = newest indexed event block (lower bound on the cursor)</span>
+                              </span>
+                            }
+                          >
+                            <span style={{ color: p.behindBlocks > 2000 ? C.warn : C.com, borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>
+                              {' '}{p.behindBlocks === 0 ? '(at head)' : `(${F.compact(p.behindBlocks)} blk behind)`}
+                            </span>
+                          </Tip>
+                        ) : null}
                       </span>
                     ))
                   ) : (
