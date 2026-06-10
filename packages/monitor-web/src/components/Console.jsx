@@ -387,7 +387,7 @@ export function Console() {
             <span style={col(78, 'right')}><Tip underline w={250} label={HEADERS.lat}>lat</Tip></span>
             <span style={col(70, 'right')}><Tip underline w={290} label={HEADERS.tps}>tps</Tip></span>
             <span style={col(116, 'right')}><Tip underline w={280} label={HEADERS.tvl}>bridged tvl</Tip></span>
-            <span style={col(104, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending</Tip></span>
+            <span style={col(104, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending out</Tip></span>
             <span style={col(74, 'right')}><Tip underline w={250} label={HEADERS.batch}>batch</Tip></span>
             <span style={col(66, 'right')}><Tip underline w={260} label={HEADERS.retry}>retry</Tip></span>
             <span style={col(46, 'right')}><Tip underline w={250} label={HEADERS.alert}>alert</Tip></span>
