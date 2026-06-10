@@ -169,6 +169,8 @@ export const toViewChain = c => {
       targetMins: batchTargetMins(c.assertionIntervalSeconds),
       lastBatchAt: c.lastBatchAt,
       seqNum: c.lastBatchSequenceNumber,
+      posterBalanceEth: c.posterBalanceWei != null ? Number(c.posterBalanceWei) / 1e18 : null,
+      blockBacklog: c.blockBacklog ?? null,
     },
     assertion: {
       lastMins: minsSince(c.latestAssertionCreatedAt),
@@ -178,6 +180,8 @@ export const toViewChain = c => {
       created8d: c.createdAssertions8d || 0,
       confirmed8d: c.confirmedAssertions8d || 0,
       stuck: c.health.assertion === 'critical',
+      baseStakeEth: c.baseStakeWei != null ? Number(c.baseStakeWei) / 1e18 : null,
+      whitelistDisabled: c.validatorWhitelistDisabled ?? null,
     },
     retry: {
       open: c.openRetryCount || 0,

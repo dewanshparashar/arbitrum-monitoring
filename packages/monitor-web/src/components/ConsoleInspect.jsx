@@ -398,10 +398,10 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 vColor={C.txt}
               />
               <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 8, paddingTop: 8 }}>
-                <KV k={<Tip underline label="On-chain balance of the batch-poster account on the parent chain.">poster balance</Tip>} v={<Gap what="batch-poster balance not indexed by the worker" />} />
-                <KV k={<Tip underline label="Days the batch poster can keep posting before running dry, from balance and gas-burn rate.">runway</Tip>} v={<Gap what="poster balance / gas-burn not indexed" />} />
-                <KV k={<Tip underline label="Calldata compression ratio (brotli).">compression</Tip>} v={<Gap what="compression ratio not indexed" />} />
-                <KV k={<Tip underline label="Child-chain blocks produced but not yet posted in a batch.">block backlog</Tip>} v={<Gap what="backlog not indexed" />} />
+                <KV k={<Tip underline label="On-chain balance of the batch-poster EOA on the parent chain (it pays posting gas from this), read by the worker each cycle.">poster balance</Tip>} v={c.batch.posterBalanceEth != null ? F.eth(c.batch.posterBalanceEth, 'ETH') : <Gap what="batch poster not resolved / worker not deployed yet" />} vColor={c.batch.posterBalanceEth != null && c.batch.posterBalanceEth < 0.05 ? C.warn : C.txt} />
+                <KV k={<Tip underline label="Days the batch poster can keep posting before running dry, from balance ÷ gas-burn rate.">runway</Tip>} v={<Gap what="needs 24h gas-burn tracking (follow-up)" />} />
+                <KV k={<Tip underline label="Calldata compression ratio (brotli).">compression</Tip>} v={<Gap what="needs per-batch calldata analysis (follow-up)" />} />
+                <KV k={<Tip underline label="Child-chain blocks produced but not yet reported in a batch = chain head − last batch's max block.">block backlog</Tip>} v={c.batch.blockBacklog != null ? F.num(c.batch.blockBacklog) + ' blocks' : <Gap what="needs child head + a batch (worker not deployed yet)" />} vColor={c.batch.blockBacklog != null && c.batch.blockBacklog > 50000 ? C.warn : C.txt} />
               </div>
             </Panel>
 
@@ -439,8 +439,8 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 vColor={c.bold ? C.str : C.com}
               />
               <div style={{ borderTop: '1px solid var(--hairline)', marginTop: 8, paddingTop: 8 }}>
-                <KV k={<Tip underline label="Active validator count and stakes.">validators</Tip>} v={<Gap what="validator set / stakes not indexed" />} />
-                <KV k={<Tip underline label="Minimum stake a validator must bond.">base stake</Tip>} v={<Gap what="base stake not indexed" />} />
+                <KV k={<Tip underline label="Validation access — whether anyone can validate (permissionless / BoLD) or only a whitelisted set. Read on-chain from Rollup.validatorWhitelistDisabled().">validators</Tip>} v={c.assertion.whitelistDisabled == null ? <Gap what="rollup read failed / worker not deployed yet" /> : (c.assertion.whitelistDisabled ? 'permissionless' : 'whitelisted')} vColor={c.assertion.whitelistDisabled === false ? C.warn : C.txt} />
+                <KV k={<Tip underline label="Minimum stake a validator must bond, read on-chain from Rollup.baseStake(). BoLD chains alert below 1 ETH.">base stake</Tip>} v={c.assertion.baseStakeEth != null ? F.eth(c.assertion.baseStakeEth, 'ETH') : <Gap what="rollup read failed / worker not deployed yet" />} vColor={c.assertion.baseStakeEth != null && c.assertion.baseStakeEth < 1 ? C.warn : C.txt} />
               </div>
             </Panel>
 

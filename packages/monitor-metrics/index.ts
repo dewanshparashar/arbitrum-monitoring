@@ -13,7 +13,9 @@ import {
   getErc20Balance,
   getErc20Decimals,
   getLogs,
+  getRollupBaseStake,
   getTransactionSender,
+  getValidatorWhitelistDisabled,
   l2ToL1Topic,
   outboxExecutedTopic,
   probeRpc,
@@ -151,6 +153,10 @@ class MetricsDb {
         arbos_name text,
         batch_poster text,
         tps double precision,
+        poster_balance_wei numeric(78, 0),
+        base_stake_wei numeric(78, 0),
+        validator_whitelist_disabled boolean,
+        child_head_block numeric(78, 0),
         checked_at timestamptz not null
       )
     `)
@@ -160,6 +166,14 @@ class MetricsDb {
     await this.pool.query(
       `alter table ${this.chainRuntimeTable} add column if not exists tps double precision`
     )
+    for (const col of [
+      'poster_balance_wei numeric(78, 0)',
+      'base_stake_wei numeric(78, 0)',
+      'validator_whitelist_disabled boolean',
+      'child_head_block numeric(78, 0)',
+    ]) {
+      await this.pool.query(`alter table ${this.chainRuntimeTable} add column if not exists ${col}`)
+    }
   }
 
   async getState(key: string) {
@@ -281,35 +295,63 @@ class MetricsDb {
     }
   }
 
-  // Upserts just the batch_poster column (independent of the ArbOS upsert).
+  // Batch poster EOA + its parent-chain balance (wei).
   async upsertChainBatchPoster(row: {
     chainId: number
     batchPoster: string
+    posterBalanceWei: string | null
     checkedAt: string
   }) {
     await this.pool.query(
       `
-        insert into ${this.chainRuntimeTable} (chain_id, batch_poster, checked_at)
-        values ($1, $2, $3)
+        insert into ${this.chainRuntimeTable} (chain_id, batch_poster, poster_balance_wei, checked_at)
+        values ($1, $2, $3, $4)
         on conflict (chain_id) do update
         set batch_poster = excluded.batch_poster,
+            poster_balance_wei = excluded.poster_balance_wei,
             checked_at = excluded.checked_at
       `,
-      [row.chainId, row.batchPoster, row.checkedAt]
+      [row.chainId, row.batchPoster, row.posterBalanceWei, row.checkedAt]
     )
   }
 
-  // Upserts just the TPS column (child-chain throughput sampled per cycle).
-  async upsertChainTps(row: { chainId: number; tps: number; checkedAt: string }) {
+  // Rollup security params read on-chain (base stake, validator whitelist).
+  async upsertChainAssertion(row: {
+    chainId: number
+    baseStakeWei: string | null
+    validatorWhitelistDisabled: boolean | null
+    checkedAt: string
+  }) {
     await this.pool.query(
       `
-        insert into ${this.chainRuntimeTable} (chain_id, tps, checked_at)
-        values ($1, $2, $3)
+        insert into ${this.chainRuntimeTable} (chain_id, base_stake_wei, validator_whitelist_disabled, checked_at)
+        values ($1, $2, $3, $4)
         on conflict (chain_id) do update
-        set tps = excluded.tps,
+        set base_stake_wei = excluded.base_stake_wei,
+            validator_whitelist_disabled = excluded.validator_whitelist_disabled,
             checked_at = excluded.checked_at
       `,
-      [row.chainId, row.tps, row.checkedAt]
+      [row.chainId, row.baseStakeWei, row.validatorWhitelistDisabled, row.checkedAt]
+    )
+  }
+
+  // TPS + child-chain head block (sampled per cycle).
+  async upsertChainTps(row: {
+    chainId: number
+    tps: number | null
+    childHeadBlock: string | null
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.chainRuntimeTable} (chain_id, tps, child_head_block, checked_at)
+        values ($1, $2, $3, $4)
+        on conflict (chain_id) do update
+        set tps = excluded.tps,
+            child_head_block = excluded.child_head_block,
+            checked_at = excluded.checked_at
+      `,
+      [row.chainId, row.tps, row.childHeadBlock, row.checkedAt]
     )
   }
 
@@ -720,7 +762,8 @@ const arbosNameFor = (version: number): string | null => {
 const TPS_WINDOW_BLOCKS = Math.max(2, Number(process.env.MONITOR_METRICS_TPS_WINDOW || 20))
 
 // TPS = total txs across the last N child blocks / the window's wall-clock span.
-const sampleTps = async (rpcUrl: string): Promise<number | null> => {
+// Also returns the chain's head block (reused for the block-backlog metric).
+const sampleTps = async (rpcUrl: string): Promise<{ tps: number | null; head: bigint }> => {
   const head = await getBlockNumber(rpcUrl)
   const span = BigInt(TPS_WINDOW_BLOCKS - 1)
   const from = head > span ? head - span : 0n
@@ -728,13 +771,12 @@ const sampleTps = async (rpcUrl: string): Promise<number | null> => {
   const nums: bigint[] = []
   for (let b = from; b <= head; b++) nums.push(b)
   const blocks = await Promise.all(nums.map(n => getBlockTxStats(rpcUrl, n)))
-  if (blocks.length < 2) return null
+  if (blocks.length < 2) return { tps: null, head }
 
   const sumTx = blocks.reduce((total, block) => total + block.txCount, 0)
   const seconds = Number(blocks[blocks.length - 1].timestamp - blocks[0].timestamp)
-  if (seconds <= 0) return null
-  const tps = sumTx / seconds
-  return Number.isFinite(tps) ? tps : null
+  const tps = seconds > 0 ? sumTx / seconds : null
+  return { tps: tps != null && Number.isFinite(tps) ? tps : null, head }
 }
 
 const syncChainRuntime = async (db: MetricsDb) => {
@@ -774,9 +816,18 @@ const syncChainRuntime = async (db: MetricsDb) => {
         }
         const sender = await getTransactionSender(parentRpcUrl, txHash)
         if (sender) {
+          // also snapshot the poster's parent-chain balance (it pays gas in
+          // the parent's native asset)
+          let posterBalanceWei: string | null = null
+          try {
+            posterBalanceWei = (await getBalance(parentRpcUrl, sender)).toString()
+          } catch {
+            posterBalanceWei = null
+          }
           await db.upsertChainBatchPoster({
             chainId: chain.chainId,
             batchPoster: sender,
+            posterBalanceWei,
             checkedAt,
           })
         }
@@ -784,13 +835,47 @@ const syncChainRuntime = async (db: MetricsDb) => {
         console.error(`batch poster read failed for ${chain.slug}`, error)
       }
 
-      // TPS — sampled from the chain's own RPC (child chain), isolated so a
-      // flaky child RPC doesn't drop arbos/batch-poster above.
+      // Rollup security params (base stake, validator whitelist) — parent-chain
+      // eth_call on the Rollup, isolated from the reads above.
       try {
-        const tps = await sampleTps(chain.rpcUrl)
-        if (tps != null) {
-          await db.upsertChainTps({ chainId: chain.chainId, tps, checkedAt })
+        const parentRpcUrl = parentRpcUrls[chain.parentChainId]
+        const rollup = chain.ethBridge.rollup as `0x${string}`
+        if (parentRpcUrl && rollup) {
+          let baseStakeWei: string | null = null
+          let validatorWhitelistDisabled: boolean | null = null
+          try {
+            baseStakeWei = (await getRollupBaseStake(parentRpcUrl, rollup)).toString()
+          } catch {
+            baseStakeWei = null
+          }
+          try {
+            validatorWhitelistDisabled = await getValidatorWhitelistDisabled(parentRpcUrl, rollup)
+          } catch {
+            validatorWhitelistDisabled = null
+          }
+          if (baseStakeWei !== null || validatorWhitelistDisabled !== null) {
+            await db.upsertChainAssertion({
+              chainId: chain.chainId,
+              baseStakeWei,
+              validatorWhitelistDisabled,
+              checkedAt,
+            })
+          }
         }
+      } catch (error) {
+        console.error(`rollup info read failed for ${chain.slug}`, error)
+      }
+
+      // TPS + child head — sampled from the chain's own RPC, isolated so a
+      // flaky child RPC doesn't drop the reads above.
+      try {
+        const { tps, head } = await sampleTps(chain.rpcUrl)
+        await db.upsertChainTps({
+          chainId: chain.chainId,
+          tps,
+          childHeadBlock: head != null ? head.toString() : null,
+          checkedAt,
+        })
       } catch (error) {
         console.error(`tps sample failed for ${chain.slug}`, error)
       }

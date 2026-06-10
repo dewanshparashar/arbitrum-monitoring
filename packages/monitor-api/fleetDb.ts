@@ -40,6 +40,7 @@ type BatchSummaryRow = {
   parent_block_timestamp: number
   batch_sequence_number: string
   data_location: number
+  max_block_number: string | null
 }
 
 type AssertionSummaryRow = {
@@ -73,6 +74,10 @@ type ChainRuntimeRow = {
   arbos_name: string | null
   batch_poster: string | null
   tps: number | null
+  poster_balance_wei: string | null
+  base_stake_wei: string | null
+  validator_whitelist_disabled: boolean | null
+  child_head_block: string | null
   checked_at: number | null
 }
 
@@ -148,7 +153,11 @@ type FleetChain = {
   arbosName: string | null
   arbosRaw: number | null
   batchPoster: string | null
+  posterBalanceWei: string | null
+  baseStakeWei: string | null
+  validatorWhitelistDisabled: boolean | null
   tps: number | null
+  blockBacklog: number | null
   runtimeCheckedAt: number | null
   alerts: number
 }
@@ -500,7 +509,8 @@ export class FleetDb {
             chain_id,
             parent_block_timestamp,
             batch_sequence_number,
-            data_location
+            data_location,
+            max_block_number::text as max_block_number
           from ${this.batchDeliveriesTable}
           order by chain_id, parent_block_timestamp desc, log_index desc
         `),
@@ -613,6 +623,10 @@ export class FleetDb {
             arbos_name,
             batch_poster,
             tps,
+            poster_balance_wei::text as poster_balance_wei,
+            base_stake_wei::text as base_stake_wei,
+            validator_whitelist_disabled,
+            child_head_block::text as child_head_block,
             cast(extract(epoch from checked_at) as bigint) as checked_at
           from ${this.chainRuntimeTable}
         `),
@@ -763,7 +777,15 @@ export class FleetDb {
           arbosName: runtime?.arbos_name ?? null,
           arbosRaw: runtime?.arbos_raw ?? null,
           batchPoster: runtime?.batch_poster ?? null,
+          posterBalanceWei: runtime?.poster_balance_wei ?? null,
+          baseStakeWei: runtime?.base_stake_wei ?? null,
+          validatorWhitelistDisabled: runtime?.validator_whitelist_disabled ?? null,
           tps: runtime?.tps != null ? Number(runtime.tps) : null,
+          // block backlog = child head − last L2 block reported in a batch
+          blockBacklog:
+            runtime?.child_head_block != null && batch?.max_block_number != null
+              ? Math.max(0, Number(runtime.child_head_block) - Number(batch.max_block_number))
+              : null,
           runtimeCheckedAt: runtime?.checked_at ?? null,
           alerts: countAlerts(retryableStatus, batchStatus, assertionStatus),
         }

@@ -54,10 +54,10 @@ Practical substitutions already made (no backend change needed):
 | --- | --- | --- |
 | Last batch age, target, seq #, data location | ✅ live | `batch_deliveries` |
 | Batch poster EOA | ✅ live | worker reads the `from` of the most recent indexed batch tx on the parent chain → `chain_runtime.batch_poster` |
-| **Poster balance** | ❌ gap | worker must snapshot the batch-poster EOA balance on the parent chain (address is now known, balance/runway still pending) |
-| **Runway (days)** | ❌ gap | derived from poster balance + rolling 24h gas-burn (batch-poster monitor logic) |
+| Poster balance | ✅ live | worker `eth_getBalance(batchPoster)` on the parent chain each cycle → `chain_runtime.poster_balance_wei` |
+| Block backlog | ✅ live | `child_head_block − latest batch max_block_number` (worker samples child head; indexer provides the batch's max block) |
+| **Runway (days)** | ❌ gap | poster balance ÷ rolling 24h gas-burn — balance is live, gas-burn (per-batch tx fees over 24h) still pending |
 | **Compression ratio** | ❌ gap | needs batch calldata size vs decompressed size (brotli) per batch |
-| **Block backlog** | ❌ gap | `latestChildBlock − lastBlockReported`; needs child-chain head tracking |
 | **DAC committee online/total** | ❌ gap | needs DAC keyset / committee health probing for AnyTrust chains |
 
 ### assertion.health
@@ -66,8 +66,9 @@ Practical substitutions already made (no backend change needed):
 | Last assertion age, created/confirmed counts | ✅ live | `assertion_events` |
 | Confirm period (blocks) | ✅ live | portal snapshot `confirmPeriodBlocks` (inspector detail) |
 | Dispute mode (BoLD/Classic) | ✅ live | inferred from latest assertion event name |
-| **Validator count / whitelist status** | ❌ gap | needs Rollup validator-set / `validatorWhitelistDisabled` reads |
-| **Base stake** | ❌ gap | needs Rollup `baseStake` read (BoLD <1 ETH alert) |
+| Whitelist status (permissionless / whitelisted) | ✅ live | worker `Rollup.validatorWhitelistDisabled()` read → `chain_runtime.validator_whitelist_disabled` |
+| Base stake | ✅ live | worker `Rollup.baseStake()` read → `chain_runtime.base_stake_wei` (BoLD <1 ETH highlighted) |
+| **Validator count / set** | ❌ gap | enumerating the validator set is rollup-version-dependent; only the whitelist flag is read |
 
 ### retryable.tickets
 | Field | Status | Where it would come from |

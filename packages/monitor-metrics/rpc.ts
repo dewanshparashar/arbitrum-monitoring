@@ -22,6 +22,12 @@ const arbSysInterface = new ethers.utils.Interface([
   'function arbOSVersion() view returns (uint64)',
 ])
 
+// Rollup core getters present on both classic and BoLD rollups.
+const rollupInfoInterface = new ethers.utils.Interface([
+  'function baseStake() view returns (uint256)',
+  'function validatorWhitelistDisabled() view returns (bool)',
+])
+
 const l2ToL1Interface = new ethers.utils.Interface([
   'event L2ToL1Tx(address caller, address indexed destination, uint256 indexed hash, uint256 indexed position, uint256 arbBlockNum, uint256 ethBlockNum, uint256 timestamp, uint256 callvalue, bytes data)',
 ])
@@ -214,6 +220,25 @@ export const getArbOsVersionRaw = async (rpcUrl: string) => {
     { retries: 1 }
   )
   return Number(arbSysInterface.decodeFunctionResult('arbOSVersion', result)[0])
+}
+
+// Rollup baseStake (wei) — BoLD alerts when < 1 ETH. Returns null if the call
+// reverts (e.g. a rollup variant without the getter).
+export const getRollupBaseStake = async (rpcUrl: string, rollup: string) => {
+  const data = rollupInfoInterface.encodeFunctionData('baseStake')
+  const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: rollup, data }, 'latest'], {
+    retries: 1,
+  })
+  return BigInt(rollupInfoInterface.decodeFunctionResult('baseStake', result)[0].toString())
+}
+
+// true = permissionless validation (whitelist disabled); false = whitelisted.
+export const getValidatorWhitelistDisabled = async (rpcUrl: string, rollup: string) => {
+  const data = rollupInfoInterface.encodeFunctionData('validatorWhitelistDisabled')
+  const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: rollup, data }, 'latest'], {
+    retries: 1,
+  })
+  return Boolean(rollupInfoInterface.decodeFunctionResult('validatorWhitelistDisabled', result)[0])
 }
 
 export const getErc20Decimals = async (rpcUrl: string, token: string) => {
