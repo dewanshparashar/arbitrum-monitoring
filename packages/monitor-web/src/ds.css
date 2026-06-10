@@ -1,0 +1,97 @@
+/* ============================================================
+   Arbitrum Chains Monitor — Design System
+   Dark operator theme · Arbitrum-anchored · Geist type
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* ---- Brand ---- */
+  --arb-blue:      #1B4ADD;   /* Arbitrum primary */
+  --arb-blue-2:    #2D6BFF;
+  --arb-cyan:      #12AAFF;   /* accent / links */
+  --arb-navy:      #213147;   /* brand navy */
+
+  /* ---- Surfaces (dark) ---- */
+  --bg:            #0A0D14;   /* page */
+  --bg-2:          #0E121B;   /* raised panel */
+  --surface:       #121826;   /* card */
+  --surface-2:     #161D2E;   /* card hover / inset */
+  --surface-3:     #1C2438;   /* active / chip */
+  --hairline:      rgba(255,255,255,0.07);
+  --hairline-2:    rgba(255,255,255,0.12);
+
+  /* ---- Text ---- */
+  --text:          #E8ECF4;
+  --text-2:        #A6B0C3;   /* secondary */
+  --text-3:        #6B7689;   /* muted */
+  --text-4:        #495163;   /* faint */
+
+  /* ---- Status ---- */
+  --ok:            #3DD68C;   /* healthy */
+  --ok-dim:        rgba(61,214,140,0.14);
+  --warn:          #F5B544;   /* warning / degraded */
+  --warn-dim:      rgba(245,181,68,0.14);
+  --crit:          #FF5C6C;   /* critical / down */
+  --crit-dim:      rgba(255,92,108,0.14);
+  --idle:          #5A6478;   /* idle / unknown */
+  --idle-dim:      rgba(90,100,120,0.16);
+  --info:          var(--arb-cyan);
+  --info-dim:      rgba(18,170,255,0.13);
+
+  /* ---- Type ---- */
+  --font: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* ---- Radius / shadow ---- */
+  --r-sm: 7px;
+  --r:    11px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --shadow: 0 1px 2px rgba(0,0,0,0.4), 0 8px 24px -8px rgba(0,0,0,0.5);
+  --shadow-lg: 0 24px 64px -16px rgba(0,0,0,0.6);
+  --ring: 0 0 0 1px var(--hairline);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* ---------- Status primitives ---------- */
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+.dot.ok   { background: var(--ok);   box-shadow: 0 0 0 3px var(--ok-dim); }
+.dot.warn { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-dim); }
+.dot.crit { background: var(--crit); box-shadow: 0 0 0 3px var(--crit-dim); }
+.dot.idle { background: var(--idle); box-shadow: 0 0 0 3px var(--idle-dim); }
+
+.dot.pulse.ok   { animation: pulseOk 2.4s ease-in-out infinite; }
+.dot.pulse.crit { animation: pulseCrit 1.4s ease-in-out infinite; }
+@keyframes pulseOk   { 0%,100%{ box-shadow:0 0 0 0 var(--ok-dim);} 50%{ box-shadow:0 0 0 5px rgba(61,214,140,0);} }
+@keyframes pulseCrit { 0%,100%{ box-shadow:0 0 0 0 rgba(255,92,108,0.4);} 50%{ box-shadow:0 0 0 6px rgba(255,92,108,0);} }
+
+/* pills */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: 999px;
+  font-size: 12px; font-weight: 500; line-height: 1;
+  border: 1px solid transparent; white-space: nowrap;
+}
+.pill.ok   { color: var(--ok);   background: var(--ok-dim);   border-color: rgba(61,214,140,0.25); }
+.pill.warn { color: var(--warn); background: var(--warn-dim); border-color: rgba(245,181,68,0.25); }
+.pill.crit { color: var(--crit); background: var(--crit-dim); border-color: rgba(255,92,108,0.25); }
+.pill.idle { color: var(--text-3); background: var(--idle-dim); border-color: var(--hairline); }
+.pill.info { color: var(--info); background: var(--info-dim); border-color: rgba(18,170,255,0.25); }
+
+.mono { font-family: var(--mono); font-feature-settings: 'tnum' 1; }
+
+/* scrollbars */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: #2a3450; background-clip: padding-box; }
+*::-webkit-scrollbar-track { background: transparent; }

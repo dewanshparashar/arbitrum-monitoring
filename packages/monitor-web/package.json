@@ -3,8 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "rm -rf ./dist && mkdir -p ./dist && cp ./index.html ./app.js ./config.js ./styles.css ./server.js ./dist",
-    "dev": "yarn build && node ./dist/server.js",
-    "test": "yarn build"
+    "build": "node build.mjs",
+    "dev": "node build.mjs && node ./dist/server.js",
+    "test": "node build.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2"
   }
 }
