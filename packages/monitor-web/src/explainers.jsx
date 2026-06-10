@@ -226,7 +226,7 @@ export const HEADERS = {
   parent: 'The settlement (parent) chain this chain posts its batches and assertions to.',
   type: 'Data availability + dispute protocol. rollup = tx data posted on-chain as calldata; anytrust = a Data Availability Committee (DAC) holds the data. +bold = BoLD permissionless dispute protocol (vs whitelisted "classic").',
   tvl: 'Value of the native asset (ETH, or the chain\'s custom gas token) locked in the canonical bridge × its USD price. USD shows only where a price feed exists; custom gas tokens without a feed show n/a here and the native amount in the inspector.',
-  pending: 'Value in outbound (L2→L1) withdrawal messages that have left the chain but not yet been claimed on the parent chain. Shown in USD where a price feed exists, otherwise in the native gas token (e.g. 1.2M XAI).',
+  pending: 'Native-asset value in L2→L1 withdrawals that left the chain but aren\'t yet claimed on the parent. Derived (not indexed): ArbSys L2ToL1Tx events minus the parent Outbox\'s OutBoxTransactionExecuted, summed by callvalue. Native-value only (ERC-20 withdrawals excluded); USD where a price feed exists, else the gas token. Full algorithm in ? explain.',
   batch: 'Time since the sequencer last posted a batch to the parent chain. Turns red past 4× the target interval.',
   retry: 'Open retryable (parent→child) tickets in the window. The trailing ·N! flags urgent ones (expiring within 2 days or already expired).',
   alert: 'Count of R/B/A monitors currently firing (not healthy) for this chain, 0–3.',
@@ -310,8 +310,16 @@ export const Legend = React.memo(function Legend({ onClose }) {
           </Section>
 
           <Section title="bridged TVL ($)" accent={COL.num}>
-            <div>TVL = (ETH balance of the canonical bridge contract on the parent chain, at the latest indexed block) × (ETH/USD from CoinGecko).</div>
-            <div style={{ color: COL.com, marginTop: 6 }}>This measures ETH locked in the bridge — not the chain's gas-token TVL. Per-token (ERC-20) bridged value isn't indexed yet. Open a chain → bridge.flow for the exact balance, block, price and timestamps.</div>
+            <div>The native asset locked in the canonical bridge × its USD price. ETH chains read the bridge's ETH balance; custom-gas chains read <span style={{ color: COL.fn }}>nativeToken.balanceOf(bridge)</span> + <span style={{ color: COL.fn }}>decimals()</span> at the snapshot block.</div>
+            <div style={{ color: COL.com, marginTop: 6 }}>USD shown only where a price feed exists for that asset; otherwise the native amount (e.g. 1.2M XAI). Open a chain → bridge.flow for the exact balance, block, price and timestamps.</div>
+          </Section>
+
+          <Section title="pending out (L2→L1 exits)" accent={COL.warn}>
+            <div>Native-asset value in withdrawals that have left the chain but aren't yet claimed on the parent. Worker-derived (not indexed), each cycle:</div>
+            <div style={{ marginTop: 6 }}>1. read <span style={{ color: COL.fn }}>L2ToL1Tx</span> events from the <span style={{ color: COL.fn }}>ArbSys</span> precompile (<span style={{ color: COL.fn }}>0x…0064</span>) on the chain's own RPC → one row per outbound message, keyed by position, storing its <span style={{ color: COL.fn }}>callvalue</span>.</div>
+            <div>2. read <span style={{ color: COL.fn }}>OutBoxTransactionExecuted</span> from the parent <span style={{ color: COL.fn }}>Outbox</span> → mark matching positions as claimed.</div>
+            <div>3. <b>pending = created − claimed</b> (still unexecuted). Value = Σ callvalue (18-dec native); count = number of messages.</div>
+            <div style={{ color: COL.com, marginTop: 6 }}>Only native-value messages (callvalue &gt; 0) are counted — pure ERC-20 withdrawals are excluded. USD where a price feed exists, else the gas token. Best-effort: chains whose RPC rejects eth_getLogs show no data.</div>
           </Section>
 
           <Section title="alert count + freshness" accent={COL.com}>

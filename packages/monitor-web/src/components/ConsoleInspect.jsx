@@ -278,7 +278,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                   sub={c.bridge.balanceBlockNumber ? '@ block ' + c.bridge.balanceBlockNumber : null}
                 />
                 <Metric
-                  label={<Tip underline w={250} label="Value in outbound (L2→L1) messages that have left the chain but not yet been claimed on the parent chain. Denominated in the chain's native gas token; USD shown where a price feed exists.">Pending withdrawals</Tip>}
+                  label={<Tip underline w={300} label={<>Native-asset value in L2→L1 messages that left the chain but aren't yet claimed on the parent. Worker-derived (not indexed): <span style={{ fontFamily: 'var(--mono)' }}>ArbSys.L2ToL1Tx</span> events minus the parent <span style={{ fontFamily: 'var(--mono)' }}>Outbox.OutBoxTransactionExecuted</span>, summed by callvalue (18-dec native). Native-value only — pure ERC-20 withdrawals are excluded. USD where a price feed exists, else the gas token. Full algorithm in <b>? explain</b>.</>}>Pending withdrawals</Tip>}
                   value={c.bridge.pendingUsd != null
                     ? F.money(c.bridge.pendingUsd)
                     : c.bridge.pendingNative
