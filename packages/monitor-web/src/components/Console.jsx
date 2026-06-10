@@ -30,78 +30,17 @@ const order = { crit: 0, warn: 1, idle: 2, ok: 3 }
 
 const POLL_MS = 30_000
 
-const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
-const BANNER = [
-  '╔═╗╦  ╔═╗╔═╗╔╦╗  ╦ ╦╔═╗╔╦╗╔═╗╦ ╦',
-  '╠╣ ║  ║╣ ║╣  ║   ║║║╠═╣ ║ ║  ╠═╣',
-  '╚  ╩═╝╚═╝╚═╝ ╩   ╚╩╝╩ ╩ ╩ ╚═╝╩ ╩',
-]
-// minimum time the boot splash is shown (ms) — even if data loads faster
-const SPLASH_MS = 5000
-
-// centered terminal boot splash — animates over SPLASH_MS with an ASCII
-// progress bar and a sequential boot log. `progress` is 0..1.
-function Splash({ frame, progress = 0, error }) {
-  const C2 = { com: '#5A6478', str: '#3DD68C', warn: '#F5B544', crit: '#FF5C6C', num: '#12AAFF', fn: '#82AAFF' }
-  const steps = [
-    'initializing fleet register',
-    'loading portal snapshot · arbitrum dedicated chains',
-    'connecting to indexer @ hetzner-fsn1',
-    'fetching fleet overview + chain health',
-    'rendering console',
-  ]
-  // how many steps have completed, derived from elapsed progress
-  const done = Math.min(steps.length, Math.floor(progress * steps.length))
-  const stateFor = i => {
-    if (error) {
-      if (i < 2) return 'ok'
-      if (i === 2) return 'fail'
-      return 'skip'
-    }
-    if (i < done) return 'ok'
-    if (i === done) return 'pend'
-    return 'wait'
-  }
-  const BARW = 30
-  const filled = Math.max(0, Math.min(BARW, Math.round(progress * BARW)))
-  const pct = Math.round(progress * 100)
-  const barColor = error ? C2.crit : C2.num
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', fontFamily: 'var(--mono)' }}>
-      <pre style={{ margin: 0, lineHeight: 1.12, fontSize: 'clamp(11px, 2.1vw, 17px)', color: 'var(--arb-cyan)', textShadow: '0 0 22px rgba(18,170,255,0.45)' }}>
-        {BANNER.join('\n')}
-      </pre>
-      <div style={{ color: 'var(--text-4)', fontSize: 11.5, margin: '12px 0 26px', letterSpacing: '0.22em' }}>
-        FLEETWATCH.XYZ · ARBITRUM DEDICATED CHAINS · FLEET MONITOR
-      </div>
-      <div style={{ width: 'min(520px, 88vw)', fontSize: 12.5, lineHeight: '25px', textAlign: 'left' }}>
-        {steps.map((label, i) => {
-          const state = stateFor(i)
-          const dots = '.'.repeat(Math.max(0, 46 - label.length))
-          return (
-            <div key={i} style={{ color: state === 'wait' ? 'rgba(90,100,120,0.45)' : C2.com }}>
-              <span style={{ color: state === 'fail' ? C2.crit : state === 'wait' ? C2.com : C2.str, marginRight: 10 }}>
-                {state === 'ok' ? '✓' : state === 'fail' ? '✖' : state === 'skip' ? '·' : state === 'pend' ? SPINNER[frame] : '○'}
-              </span>
-              {label} <span style={{ color: 'rgba(90,100,120,0.5)' }}>{dots}</span>{' '}
-              {state === 'ok' && <span style={{ color: C2.str }}>ok</span>}
-              {state === 'fail' && <span style={{ color: C2.crit }}>failed</span>}
-              {state === 'pend' && <span style={{ color: C2.warn }}>…</span>}
-            </div>
-          )
-        })}
-      </div>
-      <div style={{ marginTop: 22, fontSize: 13, color: barColor, letterSpacing: '0.04em' }}>
-        <span style={{ opacity: 0.85 }}>[</span>
-        <span>{'█'.repeat(filled)}</span>
-        <span style={{ color: 'rgba(90,100,120,0.5)' }}>{'░'.repeat(BARW - filled)}</span>
-        <span style={{ opacity: 0.85 }}>]</span>
-        <span style={{ marginLeft: 10, color: C2.com }}>{pct}%</span>
-      </div>
-      {error && <div style={{ color: C2.crit, marginTop: 16, fontSize: 12.5 }}>! {error}</div>}
-    </div>
-  )
+// Boot animation timeline (ms): type the command, then stream the log lines,
+// then reveal the table — like watching the terminal boot up.
+const BOOT_CMD = 'arb-monitor watch --fleet --interval 30s'
+const BOOT_TYPE_START = 250
+const BOOT_MS_PER_CHAR = 30
+const BOOT_TYPE_END = BOOT_TYPE_START + BOOT_CMD.length * BOOT_MS_PER_CHAR
+const BOOT_T = {
+  l1: BOOT_TYPE_END + 350, // connecting to indexer
+  l2: BOOT_TYPE_END + 1100, // syncing chains
+  l3: BOOT_TYPE_END + 1850, // last probe / counts
+  done: BOOT_TYPE_END + 2550, // table drops in
 }
 
 const fmtTps = v => (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v).toString())
@@ -204,31 +143,28 @@ export function Console() {
 
   const [selected, setSelected] = React.useState(null)
   const [showLegend, setShowLegend] = React.useState(false)
-  const [frame, setFrame] = React.useState(0)
 
   const closeInspect = React.useCallback(() => setSelected(null), [])
   const closeLegend = React.useCallback(() => setShowLegend(false), [])
 
-  // The boot splash shows for at least SPLASH_MS, and longer if data is still
-  // loading. `elapsed` drives the progress bar + sequential boot log.
+  // Boot animation: type the command, stream the log lines, then drop in the
+  // table. `elapsed` (ms) drives the sequence; it stops once the boot finishes,
+  // and the table additionally waits on the first data payload.
   const [elapsed, setElapsed] = React.useState(0)
-  const minElapsed = elapsed >= SPLASH_MS
+  const bootDone = elapsed >= BOOT_T.done
   React.useEffect(() => {
-    if (minElapsed) return undefined
-    const t = setInterval(() => setElapsed(e => Math.min(e + 100, SPLASH_MS)), 100)
+    if (bootDone) return undefined
+    const t = setInterval(() => setElapsed(e => Math.min(e + 50, BOOT_T.done)), 50)
     return () => clearInterval(t)
-  }, [minElapsed])
+  }, [bootDone])
 
-  const splashing = !minElapsed || (status === 'loading' && chains.length === 0)
-  const splashProgress = Math.min(1, elapsed / SPLASH_MS)
-
-  // Spinner only animates during the splash — never while the table
-  // (and any open tooltip/inspector) is mounted.
-  React.useEffect(() => {
-    if (!splashing) return undefined
-    const s = setInterval(() => setFrame(f => (f + 1) % SPINNER.length), 90)
-    return () => clearInterval(s)
-  }, [splashing])
+  const typedChars = Math.max(
+    0,
+    Math.min(BOOT_CMD.length, Math.floor((elapsed - BOOT_TYPE_START) / BOOT_MS_PER_CHAR))
+  )
+  const typingDone = typedChars >= BOOT_CMD.length
+  const dataReady = !!data
+  const showTable = bootDone && dataReady
 
   // Sort: busiest first (TPS), then bridged TVL, then surface unhealthy chains,
   // then name. Chains with no TPS sample (null) sink below measured-zero ones.
@@ -297,48 +233,71 @@ export function Console() {
 
       {/* terminal body */}
       <div style={{ padding: '16px 18px 38px', flex: 1, ...mono, color: C.txt, overflowX: 'auto' }}>
-        {splashing ? (
-          <div style={{ minHeight: 'calc(100vh - 150px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Splash frame={frame} progress={splashProgress} error={status === 'error' ? error : null} />
-          </div>
-        ) : (
         <div style={{ minWidth: 1020 }}>
-          {/* command + boot log */}
+          {/* animated boot log: types the command, streams the log lines, then
+              reveals the table below — one continuous "terminal booting" effect */}
           <div style={{ marginBottom: 14 }}>
             <div>
               <span style={{ color: C.str }}>arb@fsn1</span>
               <span style={{ color: C.com }}>:</span>
               <span style={{ color: C.fn }}>~/fleet</span>
               <span style={{ color: C.com }}>$ </span>
-              <span style={{ color: C.txt }}>arb-monitor watch </span>
-              <span style={{ color: C.flag }}>--fleet</span>
-              <span style={{ color: C.txt }}> </span>
-              <span style={{ color: C.flag }}>--interval</span>
-              <span style={{ color: C.num }}> 30s</span>
+              {typingDone ? (
+                <>
+                  <span style={{ color: C.txt }}>arb-monitor watch </span>
+                  <span style={{ color: C.flag }}>--fleet</span>
+                  <span style={{ color: C.txt }}> </span>
+                  <span style={{ color: C.flag }}>--interval</span>
+                  <span style={{ color: C.num }}> 30s</span>
+                </>
+              ) : (
+                <span style={{ color: C.txt }}>{BOOT_CMD.slice(0, typedChars)}</span>
+              )}
+              {!showTable && <BlinkCursor color={C.str} />}
             </div>
-            <div style={{ color: C.com }}>
-              → connecting to indexer @ <span style={{ color: C.fn }}>hetzner-fsn1</span> ............{' '}
-              {status === 'ok' ? <span style={{ color: C.str }}>ok</span> : status === 'error' ? <span style={{ color: C.crit }}>failed</span> : <span style={{ color: C.warn }}>…</span>}
-            </div>
+
+            {elapsed >= BOOT_T.l1 && (
+              <div style={{ color: C.com, animation: 'fadeIn .25s ease' }}>
+                → connecting to indexer @ <span style={{ color: C.fn }}>hetzner-fsn1</span> ............{' '}
+                {status === 'error' ? <span style={{ color: C.crit }}>failed</span> : dataReady ? <span style={{ color: C.str }}>ok</span> : <span style={{ color: C.warn }}>…</span>}
+              </div>
+            )}
+
             {status === 'error' ? (
-              <div style={{ color: C.crit }}>→ {error}</div>
+              elapsed >= BOOT_T.l1 && <div style={{ color: C.crit, animation: 'fadeIn .25s ease' }}>→ {error}</div>
             ) : (
               <>
-                <div style={{ color: C.com }}>
-                  → syncing <span style={{ color: C.num }}>{fleet.total}</span> chains across <span style={{ color: C.num }}>{fleet.parents}</span> parent networks ...{' '}
-                  {status === 'ok' ? <span style={{ color: C.str }}>ok</span> : <span style={{ color: C.warn }}>…</span>}
-                </div>
-                <div style={{ color: C.com }}>
-                  → last probe{' '}
-                  <Tip label={full(overview?.lastRpcCheckAt)}><span style={{ color: C.num }}>{overview?.lastRpcCheckAt ? relative(overview.lastRpcCheckAt) : '—'}</span></Tip> ·{' '}
-                  fetched <Tip label={full(fetchedAt)}><span style={{ color: C.num }}>{fetchedAt ? relative(fetchedAt) : '—'}</span></Tip> ·{' '}
-                  <span style={{ color: C.str }}>{fleet.ok} ok</span> <span style={{ color: C.warn }}>{fleet.warn} warn</span>{' '}
-                  <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
-                </div>
+                {elapsed >= BOOT_T.l2 && (
+                  <div style={{ color: C.com, animation: 'fadeIn .25s ease' }}>
+                    → syncing{' '}
+                    {dataReady ? (
+                      <><span style={{ color: C.num }}>{fleet.total}</span> chains across <span style={{ color: C.num }}>{fleet.parents}</span> parent networks ... <span style={{ color: C.str }}>ok</span></>
+                    ) : (
+                      <>fleet ... <span style={{ color: C.warn }}>…</span></>
+                    )}
+                  </div>
+                )}
+                {elapsed >= BOOT_T.l3 && (
+                  <div style={{ color: C.com, animation: 'fadeIn .25s ease' }}>
+                    → last probe{' '}
+                    {dataReady ? (
+                      <>
+                        <Tip label={full(overview?.lastRpcCheckAt)}><span style={{ color: C.num }}>{overview?.lastRpcCheckAt ? relative(overview.lastRpcCheckAt) : '—'}</span></Tip> ·{' '}
+                        fetched <Tip label={full(fetchedAt)}><span style={{ color: C.num }}>{fetchedAt ? relative(fetchedAt) : '—'}</span></Tip> ·{' '}
+                        <span style={{ color: C.str }}>{fleet.ok} ok</span> <span style={{ color: C.warn }}>{fleet.warn} warn</span>{' '}
+                        <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
+                      </>
+                    ) : (
+                      <span style={{ color: C.com }}>loading fleet state ...</span>
+                    )}
+                  </div>
+                )}
               </>
             )}
           </div>
 
+          {showTable && (
+            <>
           {/* table header */}
           <div style={{ color: C.com, borderBottom: '1px solid var(--hairline)', paddingBottom: 4, ...rowNoWrap }}>
             <Gutter n="#" />
@@ -470,8 +429,9 @@ export function Console() {
             <span style={{ color: C.com }}>$ </span>
             <BlinkCursor color={C.str} />
           </div>
+            </>
+          )}
         </div>
-        )}
       </div>
 
       {/* status bar (VS Code style) — fixed to the bottom of the viewport */}
