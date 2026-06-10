@@ -87,6 +87,12 @@ const rpcCall = async <T>(
       return await rpcAttempt<T>(rpcUrl, method, params, timeoutMs)
     } catch (error) {
       lastError = error
+      // 4xx is a client-side rejection (e.g. the RPC refuses eth_getLogs) —
+      // retrying won't change the outcome, so fail fast.
+      const message = error instanceof Error ? error.message : ''
+      if (/^http_4\d\d$/.test(message)) {
+        break
+      }
     }
   }
   throw lastError

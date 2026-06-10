@@ -639,6 +639,11 @@ const syncParentExitExecutions = async ({
   }
 }
 
+// Chains whose RPC refuses eth_getLogs (HTTP 4xx) are warned about once, then
+// suppressed — the exit_messages backlog is a best-effort, lowest-priority
+// signal and these RPCs simply don't serve logs.
+const exitSyncWarned = new Set<number>()
+
 const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
   const oldestSeconds = Math.floor(Date.now() / 1000) - eightDaysSeconds
   const backlog: unknown[] = []
@@ -648,8 +653,15 @@ const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
       const info = await syncChildExitLogs({ db, chain, chunkSize, oldestSeconds })
       if (info) backlog.push(info)
       await syncParentExitExecutions({ db, chain, chunkSize, oldestSeconds })
+      exitSyncWarned.delete(chain.chainId)
     } catch (error) {
-      console.error(`exit sync failed for ${chain.slug}`, error)
+      const message = error instanceof Error ? error.message : String(error)
+      if (!exitSyncWarned.has(chain.chainId)) {
+        exitSyncWarned.add(chain.chainId)
+        console.warn(
+          `exit sync unavailable for ${chain.slug} (${message}) — its RPC rejected eth_getLogs; suppressing further warnings`
+        )
+      }
     }
   }
 
