@@ -149,6 +149,8 @@ type FleetChain = {
 }
 
 const PRICE_SOURCE = 'coingecko'
+// number of bars the inspector's RPC uptime strip is bucketed into
+const RPC_HISTORY_BUCKETS = 40
 
 const parentChainNames: Record<number, string> = {
   1: 'Ethereum',
@@ -674,17 +676,32 @@ export class FleetDb {
           `,
           [chainId]
         ),
+        // RPC probe history bucketed across the FULL available window (up to the
+        // 8-day prune horizon) into a fixed number of bars, so the chart spans
+        // all probes in the DB regardless of probe interval — not just the last
+        // N. Each bucket carries uptime, p50 latency, and its time span.
         this.queryOptional(
           `
+            with samples as (
+              select ok, latency_ms, extract(epoch from checked_at) as ts
+              from ${this.rpcChecksTable}
+              where chain_id = $1
+                and checked_at >= now() - interval '8 days'
+            ),
+            bounds as (select min(ts) as lo, max(ts) as hi from samples)
             select
-              extract(epoch from checked_at) as checked_at,
-              ok,
-              latency_ms,
-              error_code
-            from ${this.rpcChecksTable}
-            where chain_id = $1
-            order by checked_at desc, id desc
-            limit 25
+              width_bucket(s.ts, b.lo, b.hi + 0.001, ${RPC_HISTORY_BUCKETS}) as bucket,
+              count(*)::int as total,
+              count(*) filter (where s.ok)::int as ok_count,
+              cast(min(s.ts) as bigint) as start_at,
+              cast(max(s.ts) as bigint) as end_at,
+              cast(round(percentile_cont(0.5) within group (order by s.latency_ms)
+                   filter (where s.ok and s.latency_ms is not null)) as int) as p50_latency,
+              bool_or(not s.ok) as any_failed
+            from samples s cross join bounds b
+            where b.lo is not null
+            group by bucket
+            order by bucket
           `,
           [chainId]
         ),
@@ -711,7 +728,7 @@ export class FleetDb {
       recentBatches: batchRows.rows,
       recentAssertions: assertionRows.rows,
       recentRetryables: retryableRows.rows,
-      recentRpcChecks: rpcRows.rows,
+      rpcBuckets: rpcRows.rows,
       pendingExits: exitRows.rows,
     }
   }

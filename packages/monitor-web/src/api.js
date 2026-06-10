@@ -315,13 +315,6 @@ export const synthesizeAlerts = c => {
   return out
 }
 
-// map an rpc_checks row -> a 0..100 value for the uptime bar strip
-const checkToUptimeValue = row => {
-  if (!row.ok) return 50 // red
-  if (row.latency_ms != null && row.latency_ms > 350) return 97 // amber
-  return 100 // green
-}
-
 // ---- public fetchers ----
 export const fetchFleet = async () => {
   const [overview, chains, status] = await Promise.all([
@@ -346,10 +339,22 @@ export const fetchChainDetail = async chainId => {
   const snapshot = detail.snapshot || {}
   const bridge = snapshot.ethBridge || {}
 
-  // RPC probe history (oldest -> newest), labelled by the real span we have.
-  const checks = [...(detail.recentRpcChecks || [])].reverse()
-  const rpcHistory = checks.map(checkToUptimeValue)
-  const spanStart = checks.length ? checks[0].checked_at : null
+  // RPC probe history, bucketed server-side across the full available window
+  // (up to 8 days) into fixed bars — spans all probes in the DB, not the last N.
+  const rpcBars = (detail.rpcBuckets || []).map(b => {
+    const total = Number(b.total) || 0
+    const ok = Number(b.ok_count) || 0
+    return {
+      pct: total ? (ok / total) * 100 : 0,
+      startAt: b.start_at != null ? Number(b.start_at) : null,
+      endAt: b.end_at != null ? Number(b.end_at) : null,
+      total,
+      ok,
+      anyFailed: !!b.any_failed,
+      p50: b.p50_latency != null ? Number(b.p50_latency) : null,
+    }
+  })
+  const spanStart = rpcBars.length ? rpcBars[0].startAt : null
 
   // retryable tickets from indexed rows
   const nowSec = Math.floor(Date.now() / 1000)
@@ -388,9 +393,8 @@ export const fetchChainDetail = async chainId => {
         }
       : null,
     confirmPeriodBlocks: snapshot.confirmPeriodBlocks ?? null,
-    rpcHistory,
+    rpcBars,
     rpcSpanStart: spanStart,
-    rpcChecks: checks,
     batches: detail.recentBatches || [],
     assertions: detail.recentAssertions || [],
     tickets,

@@ -332,8 +332,8 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
             >
               <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
                 <div style={{ flex: 1 }}>
-                  <Tip block w={260} label="Each bar is one indexed RPC probe — hover for its timestamp. Green = healthy, amber = slow (>350ms), red = failed. Range spans the probes currently in the database.">
-                    <UptimeBars history={detail?.rpcHistory || []} checks={detail?.rpcChecks || []} h={34} />
+                  <Tip block w={270} label="Each bar is a time bucket of RPC probes — hover for its span, uptime %, and p50 latency. Green = all healthy, amber = slow (p50 >350ms), red = a failure in that bucket. The strip spans the full probe history in the database (up to 8 days), bucketed to fit.">
+                    <UptimeBars bars={detail?.rpcBars || []} h={34} />
                   </Tip>
                   <div style={{ display: 'flex', justifyContent: 'space-between', color: C.com, fontSize: 10.5, marginTop: 5 }}>
                     <span>{rpcSpanLabel}</span>

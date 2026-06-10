@@ -47,8 +47,10 @@ export function ChainLogo({ chain, size = 30 }) {
 // Uptime bar strip. `history` = 0..100 values; optional `checks` = the aligned
 // rpc_checks rows ({ checked_at, ok, latency_ms, error_code }) for per-bar
 // hover detail (timestamp in the browser's timezone).
-export function UptimeBars({ history, checks, w, h = 26, gap = 1.5 }) {
-  if (!history || !history.length) {
+// Each bar is one time bucket of RPC probes (server-bucketed across the full
+// available window). `bars`: [{ pct, startAt, endAt, total, ok, anyFailed, p50 }].
+export function UptimeBars({ bars, w, h = 26, gap = 1.5 }) {
+  if (!bars || !bars.length) {
     return (
       <div style={{ color: 'var(--text-4)', fontSize: 11, height: h, display: 'flex', alignItems: 'center' }}>
         no probe history in window
@@ -57,8 +59,10 @@ export function UptimeBars({ history, checks, w, h = 26, gap = 1.5 }) {
   }
   return (
     <div style={{ display: 'flex', gap, alignItems: 'flex-end', height: h, width: w || '100%' }}>
-      {history.map((v, i) => {
-        const color = v >= 99.5 ? 'var(--ok)' : v >= 95 ? 'var(--warn)' : 'var(--crit)'
+      {bars.map((b, i) => {
+        const v = b.pct
+        // any failure in the bucket → red; else slow (p50>350) → amber; else green
+        const color = b.anyFailed || v < 95 ? 'var(--crit)' : (b.p50 != null && b.p50 > 350) || v < 99.5 ? 'var(--warn)' : 'var(--ok)'
         const bar = (
           <div
             style={{
@@ -67,26 +71,28 @@ export function UptimeBars({ history, checks, w, h = 26, gap = 1.5 }) {
               height: '100%',
               borderRadius: 1.5,
               background: color,
-              opacity: v >= 99.5 ? 0.55 : 0.95,
+              opacity: color === 'var(--ok)' ? 0.55 : 0.95,
             }}
           />
         )
-        const chk = checks && checks[i]
-        if (!chk) {
-          return <div key={i} title={v.toFixed(2) + '%'} style={{ flex: 1, height: '100%' }}>{bar}</div>
-        }
-        const statusColor = chk.ok ? (chk.latency_ms > 350 ? 'var(--warn)' : 'var(--ok)') : 'var(--crit)'
+        const span =
+          b.startAt != null && b.endAt != null && b.endAt !== b.startAt
+            ? `${absolute(b.startAt)} – ${absolute(b.endAt)}`
+            : b.startAt != null
+              ? absolute(b.startAt)
+              : ''
         const label = (
           <span>
-            <span style={{ color: 'var(--text)' }}>{absolute(chk.checked_at)}</span>
+            <span style={{ color: 'var(--text)' }}>{span}</span>
             <br />
-            <span style={{ color: statusColor, fontFamily: 'var(--mono)', fontSize: 11 }}>
-              {chk.ok ? `reachable · ${chk.latency_ms != null ? chk.latency_ms + 'ms' : 'no latency'}` : `failed${chk.error_code ? ' · ' + chk.error_code : ''}`}
+            <span style={{ color, fontFamily: 'var(--mono)', fontSize: 11 }}>
+              {b.ok}/{b.total} reachable · {v.toFixed(v >= 99.95 ? 0 : 1)}% up
+              {b.p50 != null ? ` · p50 ${b.p50}ms` : ''}
             </span>
           </span>
         )
         return (
-          <Tip key={i} block w={230} label={label} style={{ flex: 1, height: '100%' }}>
+          <Tip key={i} block w={250} label={label} style={{ flex: 1, height: '100%' }}>
             {bar}
           </Tip>
         )
