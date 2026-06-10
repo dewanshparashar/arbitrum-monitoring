@@ -95,3 +95,33 @@ Practical substitutions already made (no backend change needed):
    completes the contracts panel.
 6. Validator set / base stake / DAC committee reads — richer assertion & batch
    security signal.
+
+## Logic audit & hardening (applied)
+
+A pass over the worker (`monitor-metrics`) and the API's derivations:
+
+- **TVL is bridge ETH, not gas-token TVL.** `asset_key` is hardcoded
+  `'ethereum'` and only ETH is priced (CoinGecko), so TVL = ETH locked in the
+  canonical bridge × ETH/USD. The UI now labels this "bridge ETH" and exposes
+  the full derivation (balance @ block × price, with timestamps). Per-token /
+  custom-gas-token TVL remains a gap (see bridge.flow above).
+- **Balance ↔ block consistency.** Balances are now read *at the recorded block*
+  (`eth_getBalance(addr, <block>)`) instead of `'latest'`, so `balance_wei` and
+  `block_number` always refer to the same block (the head could advance between
+  the two calls before).
+- **Price sanity guard.** Implausible ETH prices (≤ 0, non-finite, or
+  > $10,000,000) are rejected rather than poisoning fleet-wide TVL. Price
+  freshness (`priceCheckedAt`) is surfaced in the UI so staleness is visible.
+- **Per-stage + per-chain isolation.** Each worker cycle stage (rpc checks,
+  balances, price, exit sync, prune) is isolated; a failure in one no longer
+  aborts the others. Within balance sync, each chain is wrapped so one bad RPC
+  doesn't drop the whole fleet's snapshots. Failed stages are reported in the
+  worker heartbeat (`status: 'error'`, surfaced in `/api/fleet/status`).
+- **Retries with backoff on data calls only.** `eth_getBalance` /
+  `eth_blockNumber` / `eth_getLogs` / `eth_call` retry transient failures
+  (2× linear backoff). **Reachability probes deliberately do NOT retry** —
+  retrying would mask real outages and inflate uptime.
+- **Indexer freshness is version-independent.** Rather than decode Ponder's
+  internal `_ponder_checkpoint` (opaque, version-specific), `/api/fleet/status`
+  derives indexer freshness from the newest indexed parent-chain event
+  timestamp — a tight proxy on active chains (batches post every few minutes).

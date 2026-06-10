@@ -337,32 +337,52 @@ const syncBalances = async (db: MetricsDb) => {
 
   await Promise.all(
     getMainnetChains().map(async chain => {
-      const parentRpcUrl = parentRpcUrls[chain.parentChainId]
-      if (!parentRpcUrl) {
-        return
-      }
+      // isolate per-chain so one failing RPC doesn't drop the whole cycle's snapshots
+      try {
+        const parentRpcUrl = parentRpcUrls[chain.parentChainId]
+        if (!parentRpcUrl) {
+          return
+        }
 
-      let blockNumber = parentBlocks.get(chain.parentChainId)
-      if (blockNumber === undefined) {
-        blockNumber = await getBlockNumber(parentRpcUrl)
-        parentBlocks.set(chain.parentChainId, blockNumber)
-      }
+        let blockNumber = parentBlocks.get(chain.parentChainId)
+        if (blockNumber === undefined) {
+          blockNumber = await getBlockNumber(parentRpcUrl)
+          parentBlocks.set(chain.parentChainId, blockNumber)
+        }
 
-      const balanceWei = await getBalance(parentRpcUrl, chain.ethBridge.bridge as `0x${string}`)
-      await db.insertBalanceSnapshot({
-        chainId: chain.chainId,
-        assetKey: 'ethereum',
-        blockNumber: blockNumber.toString(),
-        balanceWei: balanceWei.toString(),
-        checkedAt,
-      })
+        // read the balance AT the recorded block so balance_wei and
+        // block_number are consistent (head can advance between calls)
+        const balanceWei = await getBalance(
+          parentRpcUrl,
+          chain.ethBridge.bridge as `0x${string}`,
+          blockNumber
+        )
+        await db.insertBalanceSnapshot({
+          chainId: chain.chainId,
+          assetKey: 'ethereum',
+          blockNumber: blockNumber.toString(),
+          balanceWei: balanceWei.toString(),
+          checkedAt,
+        })
+      } catch (error) {
+        console.error(`balance sync failed for ${chain.slug}`, error)
+      }
     })
   )
 }
 
+// ETH/USD is the only priced asset today; guard against absurd values so a
+// bad upstream response can't poison TVL across the whole fleet.
+const PRICE_SANITY_CEILING_USD = 10_000_000
+
 const syncEthereumPrice = async (db: MetricsDb) => {
   const priceUsd = await fetchEthereumPriceUsd()
   if (priceUsd === null) {
+    return
+  }
+
+  if (!Number.isFinite(priceUsd) || priceUsd <= 0 || priceUsd > PRICE_SANITY_CEILING_USD) {
+    console.error(`rejecting implausible ethereum price: ${priceUsd}`)
     return
   }
 
@@ -517,18 +537,27 @@ const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
   }
 }
 
+// Each stage is isolated so a failure in one (e.g. price API down) never
+// blocks the others (RPC probes, balances, exit indexing) from updating.
+// Failed stage names are collected so the heartbeat can report partial failure.
 const runCycle = async (db: MetricsDb, chunkSize: number) => {
-  await syncRpcChecks(db)
-
-  try {
-    await syncBalances(db)
-    await syncEthereumPrice(db)
-  } catch (error) {
-    console.error('balance sync failed', error)
+  const failed: string[] = []
+  const stage = async (label: string, run: () => Promise<void>) => {
+    try {
+      await run()
+    } catch (error) {
+      console.error(`${label} failed`, error)
+      failed.push(label)
+    }
   }
 
-  await syncExitMessages(db, chunkSize)
-  await db.prune()
+  await stage('rpc checks', () => syncRpcChecks(db))
+  await stage('balance sync', () => syncBalances(db))
+  await stage('price sync', () => syncEthereumPrice(db))
+  await stage('exit sync', () => syncExitMessages(db, chunkSize))
+  await stage('prune', () => db.prune())
+
+  return { failed }
 }
 
 export const main = async () => {
@@ -575,9 +604,15 @@ export const main = async () => {
     }
 
     try {
-      await runCycle(db, Math.max(options.logChunkSize, 100))
-      console.log(`monitor-metrics cycle complete in ${Date.now() - startedAt}ms`)
-      await heartbeat('ok')
+      const { failed } = await runCycle(db, Math.max(options.logChunkSize, 100))
+      console.log(
+        `monitor-metrics cycle complete in ${Date.now() - startedAt}ms` +
+          (failed.length ? ` (failed: ${failed.join(', ')})` : '')
+      )
+      await heartbeat(
+        failed.length ? 'error' : 'ok',
+        failed.length ? new Error(`stages failed: ${failed.join(', ')}`) : undefined
+      )
     } catch (error) {
       console.error('monitor-metrics cycle failed', error)
       await heartbeat('error', error)

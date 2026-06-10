@@ -21,11 +21,14 @@ const outboxInterface = new ethers.utils.Interface([
   'event OutBoxTransactionExecuted(address indexed to, address indexed l2Sender, uint256 indexed zero, uint256 transactionIndex)',
 ])
 
-const rpcCall = async <T>(
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// Single JSON-RPC attempt with a hard timeout.
+const rpcAttempt = async <T>(
   rpcUrl: string,
   method: string,
   params: unknown[],
-  timeoutMs = 10_000
+  timeoutMs: number
 ): Promise<T> => {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -34,12 +37,7 @@ const rpcCall = async <T>(
     const response = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        id: 1,
-        jsonrpc: '2.0',
-        method,
-        params,
-      }),
+      body: JSON.stringify({ id: 1, jsonrpc: '2.0', method, params }),
       signal: controller.signal,
     })
 
@@ -60,6 +58,29 @@ const rpcCall = async <T>(
   } finally {
     clearTimeout(timer)
   }
+}
+
+// Data calls retry transient failures with linear backoff. Reachability
+// probes must NOT retry (retrying would mask real outages), so they pass
+// retries: 0.
+const rpcCall = async <T>(
+  rpcUrl: string,
+  method: string,
+  params: unknown[],
+  { timeoutMs = 10_000, retries = 0 }: { timeoutMs?: number; retries?: number } = {}
+): Promise<T> => {
+  let lastError: unknown
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    if (attempt > 0) {
+      await sleep(250 * attempt)
+    }
+    try {
+      return await rpcAttempt<T>(rpcUrl, method, params, timeoutMs)
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError
 }
 
 const toHexBlock = (value: bigint) => `0x${value.toString(16)}`
@@ -91,13 +112,15 @@ export const probeRpc = async (rpcUrl: string) => {
 }
 
 export const getBlockNumber = (rpcUrl: string) =>
-  rpcCall<string>(rpcUrl, 'eth_blockNumber', []).then(value => BigInt(value))
+  rpcCall<string>(rpcUrl, 'eth_blockNumber', [], { retries: 2 }).then(value => BigInt(value))
 
 export const getBlock = async (rpcUrl: string, blockNumber: bigint) => {
-  const block = await rpcCall<{ timestamp: string }>(rpcUrl, 'eth_getBlockByNumber', [
-    toHexBlock(blockNumber),
-    false,
-  ])
+  const block = await rpcCall<{ timestamp: string }>(
+    rpcUrl,
+    'eth_getBlockByNumber',
+    [toHexBlock(blockNumber), false],
+    { retries: 2 }
+  )
 
   return {
     blockNumber,
@@ -105,14 +128,26 @@ export const getBlock = async (rpcUrl: string, blockNumber: bigint) => {
   }
 }
 
-export const getBalance = async (rpcUrl: string, address: string) => {
-  const value = await rpcCall<string>(rpcUrl, 'eth_getBalance', [address, 'latest'])
+// Reads the balance at an explicit block so the stored balance and
+// block_number are consistent (the head can advance between calls). Defaults
+// to 'latest' when no block is given.
+export const getBalance = async (
+  rpcUrl: string,
+  address: string,
+  blockNumber?: bigint
+) => {
+  const blockTag = blockNumber === undefined ? 'latest' : toHexBlock(blockNumber)
+  const value = await rpcCall<string>(rpcUrl, 'eth_getBalance', [address, blockTag], {
+    retries: 2,
+  })
   return BigInt(value)
 }
 
 export const readActiveOutbox = async (rpcUrl: string, bridge: string) => {
   const data = activeOutboxInterface.encodeFunctionData('activeOutbox')
-  const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: bridge, data }, 'latest'])
+  const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: bridge, data }, 'latest'], {
+    retries: 2,
+  })
   return activeOutboxInterface.decodeFunctionResult('activeOutbox', result)[0] as string
 }
 
@@ -129,14 +164,19 @@ export const getLogs = async ({
   fromBlock: bigint
   toBlock: bigint
 }) =>
-  rpcCall<RpcLog[]>(rpcUrl, 'eth_getLogs', [
-    {
-      address,
-      topics: [topic],
-      fromBlock: toHexBlock(fromBlock),
-      toBlock: toHexBlock(toBlock),
-    },
-  ])
+  rpcCall<RpcLog[]>(
+    rpcUrl,
+    'eth_getLogs',
+    [
+      {
+        address,
+        topics: [topic],
+        fromBlock: toHexBlock(fromBlock),
+        toBlock: toHexBlock(toBlock),
+      },
+    ],
+    { retries: 2 }
+  )
 
 export const findBlockByTimestamp = async (rpcUrl: string, timestamp: number) => {
   const latestBlock = await getBlockNumber(rpcUrl)
