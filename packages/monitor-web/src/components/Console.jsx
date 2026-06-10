@@ -36,11 +36,13 @@ const BOOT_CMD = 'arb-monitor watch --fleet --interval 30s'
 const BOOT_TYPE_START = 250
 const BOOT_MS_PER_CHAR = 30
 const BOOT_TYPE_END = BOOT_TYPE_START + BOOT_CMD.length * BOOT_MS_PER_CHAR
+// output lines stream faster than the typed command (it's program output)
+const BOOT_LINE_RATE = 11 // ms per char
 const BOOT_T = {
-  l1: BOOT_TYPE_END + 350, // connecting to indexer
-  l2: BOOT_TYPE_END + 1100, // syncing chains
-  l3: BOOT_TYPE_END + 1850, // last probe / counts
-  done: BOOT_TYPE_END + 2550, // table drops in
+  l1: BOOT_TYPE_END + 300, // connecting to indexer
+  l2: BOOT_TYPE_END + 1250, // syncing chains
+  l3: BOOT_TYPE_END + 2250, // last probe / counts
+  done: BOOT_TYPE_END + 3350, // table drops in
 }
 
 const fmtTps = v => (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v).toString())
@@ -89,6 +91,22 @@ const MiniUptime = React.memo(function MiniUptime({ history }) {
     </span>
   )
 })
+
+// A boot-log line that types out `plain` char-by-char from `start` (ms), then
+// swaps to the colored `children` (same visible text). Hidden until it starts.
+function BootLine({ start, rate, elapsed, plain, cursorColor, children }) {
+  const n = Math.floor((elapsed - start) / rate)
+  if (n <= 0) return null
+  if (n >= plain.length) {
+    return <div style={{ color: '#5A6478' }}>{children}</div>
+  }
+  return (
+    <div style={{ color: '#5A6478' }}>
+      {plain.slice(0, n)}
+      <BlinkCursor color={cursorColor} h={12} />
+    </div>
+  )
+}
 
 const PARENT_ABBR = { Ethereum: 'eth', Base: 'base', 'Arbitrum One': 'arb' }
 
@@ -281,47 +299,73 @@ export function Console() {
               ) : (
                 <span style={{ color: C.txt }}>{BOOT_CMD.slice(0, typedChars)}</span>
               )}
-              {!showTable && <BlinkCursor color={C.str} />}
+              {!typingDone && <BlinkCursor color={C.str} />}
             </div>
 
-            {elapsed >= BOOT_T.l1 && (
-              <div style={{ color: C.com, animation: 'fadeIn .25s ease' }}>
-                → connecting to indexer @ <span style={{ color: C.fn }}>hetzner-fsn1</span> ............{' '}
-                {status === 'error' ? <span style={{ color: C.crit }}>failed</span> : dataReady ? <span style={{ color: C.str }}>ok</span> : <span style={{ color: C.warn }}>…</span>}
-              </div>
-            )}
-
-            {status === 'error' ? (
-              elapsed >= BOOT_T.l1 && <div style={{ color: C.crit, animation: 'fadeIn .25s ease' }}>→ {error}</div>
+            {typingDone && (status === 'error' ? (
+              <>
+                <BootLine
+                  start={BOOT_T.l1}
+                  rate={BOOT_LINE_RATE}
+                  elapsed={elapsed}
+                  cursorColor={C.crit}
+                  plain="→ connecting to indexer @ hetzner-fsn1 ............ failed"
+                >
+                  → connecting to indexer @ <span style={{ color: C.fn }}>hetzner-fsn1</span> ............ <span style={{ color: C.crit }}>failed</span>
+                </BootLine>
+                <BootLine start={BOOT_T.l2} rate={BOOT_LINE_RATE} elapsed={elapsed} cursorColor={C.crit} plain={`→ ${error}`}>
+                  <span style={{ color: C.crit }}>→ {error}</span>
+                </BootLine>
+              </>
             ) : (
               <>
-                {elapsed >= BOOT_T.l2 && (
-                  <div style={{ color: C.com, animation: 'fadeIn .25s ease' }}>
-                    → syncing{' '}
-                    {dataReady ? (
-                      <><span style={{ color: C.num }}>{fleet.total}</span> chains across <span style={{ color: C.num }}>{fleet.parents}</span> parent networks ... <span style={{ color: C.str }}>ok</span></>
-                    ) : (
-                      <>fleet ... <span style={{ color: C.warn }}>…</span></>
-                    )}
-                  </div>
-                )}
-                {elapsed >= BOOT_T.l3 && (
-                  <div style={{ color: C.com, animation: 'fadeIn .25s ease' }}>
-                    → last probe{' '}
-                    {dataReady ? (
-                      <>
-                        <Tip label={full(overview?.lastRpcCheckAt)}><span style={{ color: C.num }}>{overview?.lastRpcCheckAt ? relative(overview.lastRpcCheckAt) : '—'}</span></Tip> ·{' '}
-                        fetched <Tip label={full(fetchedAt)}><span style={{ color: C.num }}>{fetchedAt ? relative(fetchedAt) : '—'}</span></Tip> ·{' '}
-                        <span style={{ color: C.str }}>{fleet.ok} ok</span> <span style={{ color: C.warn }}>{fleet.warn} warn</span>{' '}
-                        <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
-                      </>
-                    ) : (
-                      <span style={{ color: C.com }}>loading fleet state ...</span>
-                    )}
-                  </div>
-                )}
+                <BootLine
+                  start={BOOT_T.l1}
+                  rate={BOOT_LINE_RATE}
+                  elapsed={elapsed}
+                  cursorColor={C.str}
+                  plain={`→ connecting to indexer @ hetzner-fsn1 ............ ${dataReady ? 'ok' : '…'}`}
+                >
+                  → connecting to indexer @ <span style={{ color: C.fn }}>hetzner-fsn1</span> ............ {dataReady ? <span style={{ color: C.str }}>ok</span> : <span style={{ color: C.warn }}>…</span>}
+                </BootLine>
+                <BootLine
+                  start={BOOT_T.l2}
+                  rate={BOOT_LINE_RATE}
+                  elapsed={elapsed}
+                  cursorColor={C.str}
+                  plain={dataReady ? `→ syncing ${fleet.total} chains across ${fleet.parents} parent networks ... ok` : '→ syncing fleet ...'}
+                >
+                  {dataReady ? (
+                    <>→ syncing <span style={{ color: C.num }}>{fleet.total}</span> chains across <span style={{ color: C.num }}>{fleet.parents}</span> parent networks ... <span style={{ color: C.str }}>ok</span></>
+                  ) : (
+                    <>→ syncing fleet ...</>
+                  )}
+                </BootLine>
+                <BootLine
+                  start={BOOT_T.l3}
+                  rate={BOOT_LINE_RATE}
+                  elapsed={elapsed}
+                  cursorColor={C.str}
+                  plain={
+                    dataReady
+                      ? `→ last probe ${overview?.lastRpcCheckAt ? relative(overview.lastRpcCheckAt) : '—'} · fetched ${fetchedAt ? relative(fetchedAt) : '—'} · ${fleet.ok} ok ${fleet.warn} warn ${fleet.crit} crit · alerts ${fleet.activeAlerts}`
+                      : '→ loading fleet state ...'
+                  }
+                >
+                  {dataReady ? (
+                    <>
+                      → last probe{' '}
+                      <Tip label={full(overview?.lastRpcCheckAt)}><span style={{ color: C.num }}>{overview?.lastRpcCheckAt ? relative(overview.lastRpcCheckAt) : '—'}</span></Tip> ·{' '}
+                      fetched <Tip label={full(fetchedAt)}><span style={{ color: C.num }}>{fetchedAt ? relative(fetchedAt) : '—'}</span></Tip> ·{' '}
+                      <span style={{ color: C.str }}>{fleet.ok} ok</span> <span style={{ color: C.warn }}>{fleet.warn} warn</span>{' '}
+                      <span style={{ color: C.crit }}>{fleet.crit} crit</span> · alerts <span style={{ color: C.warn }}>{fleet.activeAlerts}</span>
+                    </>
+                  ) : (
+                    <>→ loading fleet state ...</>
+                  )}
+                </BootLine>
               </>
-            )}
+            ))}
           </div>
 
           {showTable && (
