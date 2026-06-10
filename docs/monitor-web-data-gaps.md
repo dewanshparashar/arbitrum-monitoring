@@ -74,7 +74,7 @@ Practical substitutions already made (no backend change needed):
 | Field | Status | Where it would come from |
 | --- | --- | --- |
 | Open / expiring / expired counts, ticket list | ✅ live | `retryable_tickets` |
-| Per-ticket token + amount + USD | ✅ live | worker enriches each ticket from its L1 creating tx: `DepositInitiated` (ERC-20 deposits → token + amount) or the `InboxMessageDelivered` payload's l2CallValue (native ETH deposits); priced via CoinGecko by contract address on the parent platform → `retryable_assets` + `asset_prices`. Generic (value-less) messages shown as `message`. Best-effort: exotic gateways / unlisted tokens fall back to no value or native-only. |
+| Per-ticket token + amount + USD | ✅ live | worker enriches each ticket from its L1 creating tx: `DepositInitiated` (ERC-20 deposits → token + amount) or the `InboxMessageDelivered` payload's l2CallValue (native ETH deposits); priced via DefiLlama by `{chain}:{address}` key → `retryable_assets` + `asset_prices`. Generic (value-less) messages shown as `message`. Best-effort: exotic gateways / unlisted tokens fall back to no value or native-only. |
 | **Triage state** (Untriaged / Investigating / Resolved) | ❌ gap | lives in the Notion board the reference retryable-monitor syncs to; not indexed |
 | **Redeemed / failed in 24h** | ❌ gap | needs child-chain redemption events (`RedeemScheduled` / `TicketRedeemed` / `AutoRedemptionFailed`) indexed |
 
@@ -103,20 +103,20 @@ Practical substitutions already made (no backend change needed):
 A pass over the worker (`monitor-metrics`) and the API's derivations:
 
 - **TVL is now measured in the chain's actual bridged asset (Part A).** For
-  ETH-native chains the canonical bridge balance is ETH (priced via CoinGecko).
+  ETH-native chains the canonical bridge balance is ETH (priced via DefiLlama).
   For the 19 custom-gas-token chains the bridge locks an ERC-20 (the native
   token), so the worker reads `nativeToken.balanceOf(bridge)` + `decimals()` at
   the snapshot block and stores it under the token's `asset_key`/`decimals`
   instead of mis-reading ETH. The API is decimals-aware (`toUsd(wei, price,
   decimals)`) and the UI shows the native amount + symbol, with **USD only
   where a price feed exists for that token** — otherwise an honest `n/a` USD
-  with the native amount shown. **Part B (per-token USD pricing) is the
-  remaining gap (now partially closed):** the worker prices custom gas tokens
-  via CoinGecko `simple/token_price` (by the token's contract address on its
-  parent platform — ethereum / arbitrum-one / base), stored under the same
-  `asset_key` as the balance, so USD lights up automatically wherever CoinGecko
-  lists the token. Tokens CoinGecko doesn't index stay native-denominated. So
-  custom-gas-token TVL is USD where a feed exists, native otherwise.
+  with the native amount shown. **Part B (per-token USD pricing) is closed:**
+  the worker prices all gas tokens via DefiLlama's keyless coins API in one
+  batched request (by the token's `{chain}:{address}` key — ethereum / base /
+  arbitrum), stored under the same `asset_key` as the balance, so USD lights up
+  automatically wherever DefiLlama lists the token. Tokens DefiLlama doesn't
+  index stay native-denominated. So custom-gas-token TVL is USD where a feed
+  exists, native otherwise.
 - **Balance ↔ block consistency.** Balances are now read *at the recorded block*
   (`eth_getBalance(addr, <block>)`) instead of `'latest'`, so `balance_wei` and
   `block_number` always refer to the same block (the head could advance between

@@ -552,39 +552,46 @@ class MetricsDb {
   }
 }
 
-// CoinGecko access. The keyless public API allows only ONE contract address
-// per token_price request and rate-limits hard (~5 req/min) — so without a key
-// we fetch one token at a time, throttled. A free Demo key (COINGECKO_API_KEY)
-// or a Pro key (COINGECKO_PRO_API_KEY) lifts both limits and lets us batch.
-const COINGECKO_DEMO_KEY = process.env.COINGECKO_API_KEY || process.env.COINGECKO_DEMO_API_KEY
-const COINGECKO_PRO_KEY = process.env.COINGECKO_PRO_API_KEY
-const COINGECKO_HAS_KEY = Boolean(COINGECKO_DEMO_KEY || COINGECKO_PRO_KEY)
-const COINGECKO_BASE = COINGECKO_PRO_KEY
-  ? 'https://pro-api.coingecko.com/api/v3'
-  : 'https://api.coingecko.com/api/v3'
-// Spacing between keyless requests to stay under the public rate limit. Ignored
-// when a key is set (we batch instead). Generous default; one cycle has time.
-const COINGECKO_THROTTLE_MS = Number(process.env.MONITOR_METRICS_COINGECKO_THROTTLE_MS || 2600)
-
-const coingeckoHeaders = (): Record<string, string> => {
-  if (COINGECKO_PRO_KEY) return { 'x-cg-pro-api-key': COINGECKO_PRO_KEY }
-  if (COINGECKO_DEMO_KEY) return { 'x-cg-demo-api-key': COINGECKO_DEMO_KEY }
-  return {}
+// Pricing via DefiLlama's coins API — keyless, batched, and it returns price +
+// symbol + decimals in one request. Token keys are `{chain}:{address}`; native
+// ETH is `coingecko:ethereum`. (CoinGecko's keyless API caps token_price at one
+// address per request and rate-limits hard, so DefiLlama is a better fit here.)
+const DEFILLAMA_CHAIN: Record<number, string> = {
+  1: 'ethereum',
+  8453: 'base',
+  42161: 'arbitrum',
 }
+const ETH_PRICE_KEY = 'coingecko:ethereum'
 
-const cgGet = async <T>(path: string): Promise<T> => {
-  const response = await fetch(`${COINGECKO_BASE}${path}`, { headers: coingeckoHeaders() })
+type LlamaCoin = { price?: number; symbol?: string; decimals?: number }
+
+const readJson = async <T>(url: string): Promise<T> => {
+  const response = await fetch(url)
   if (!response.ok) {
     throw new Error(`http_${response.status}`)
   }
   return (await response.json()) as T
 }
 
-const fetchEthereumPriceUsd = async () => {
-  const body = await cgGet<{ ethereum?: { usd?: number } }>(
-    '/simple/price?ids=ethereum&vs_currencies=usd'
+// Batched current prices for any mix of `{chain}:{address}` / `coingecko:<id>`
+// keys in ONE request. Missing/unlisted keys are simply absent from the result.
+const fetchLlamaPrices = async (keys: string[]): Promise<Record<string, LlamaCoin>> => {
+  if (!keys.length) return {}
+  const body = await readJson<{ coins?: Record<string, LlamaCoin> }>(
+    `https://coins.llama.fi/prices/current/${keys.join(',')}`
   )
-  const priceUsd = body.ethereum?.usd
+  return body.coins ?? {}
+}
+
+// DefiLlama key for an ERC-20 on its parent chain, or null for an unmapped chain.
+const llamaTokenKey = (parentChainId: number, address: string): string | null => {
+  const chain = DEFILLAMA_CHAIN[parentChainId]
+  return chain ? `${chain}:${address.toLowerCase()}` : null
+}
+
+const fetchEthereumPriceUsd = async () => {
+  const coins = await fetchLlamaPrices([ETH_PRICE_KEY])
+  const priceUsd = coins[ETH_PRICE_KEY]?.price
   return typeof priceUsd === 'number' ? priceUsd : null
 }
 
@@ -712,75 +719,31 @@ const syncEthereumPrice = async (db: MetricsDb) => {
   })
 }
 
-// CoinGecko asset-platform id per parent chain (where the gas-token ERC-20 lives)
-const COINGECKO_PLATFORM: Record<number, string> = {
-  1: 'ethereum',
-  8453: 'base',
-  42161: 'arbitrum-one',
-}
+const isSanePrice = (usd: unknown): usd is number =>
+  typeof usd === 'number' && Number.isFinite(usd) && usd > 0 && usd <= PRICE_SANITY_CEILING_USD
 
-// USD prices for ERC-20s by contract address on one platform. With a CoinGecko
-// key we batch the whole list in one request; keyless we MUST send one address
-// per request (the public API caps token_price at a single address), throttled
-// to respect the low rate limit. Per-token failures are skipped, not fatal, so
-// one unlisted/erroring token never blocks the rest — they retry next cycle.
-const fetchTokenPricesUsd = async (platform: string, addresses: string[]) => {
-  const out: Record<string, { usd?: number }> = {}
-  if (!addresses.length) return out
-
-  if (COINGECKO_HAS_KEY) {
-    const result = await cgGet<Record<string, { usd?: number }>>(
-      `/simple/token_price/${platform}?contract_addresses=${addresses.join(',')}&vs_currencies=usd`
-    )
-    return result
-  }
-
-  for (let i = 0; i < addresses.length; i++) {
-    if (i > 0) await sleep(COINGECKO_THROTTLE_MS)
-    try {
-      const result = await cgGet<Record<string, { usd?: number }>>(
-        `/simple/token_price/${platform}?contract_addresses=${addresses[i]}&vs_currencies=usd`
-      )
-      Object.assign(out, result)
-    } catch (error) {
-      console.warn(`token price fetch failed for ${addresses[i]} on ${platform}`, error)
-    }
-  }
-  return out
-}
-
-// Prices each chain's custom gas token (ERC-20 on the parent) via CoinGecko,
-// stored under the SAME asset_key syncBalances uses so the API join lights up
-// USD automatically. Best-effort: tokens CoinGecko doesn't list stay native-only.
+// Prices each chain's custom gas token (ERC-20 on the parent) via DefiLlama in
+// a SINGLE batched request, stored under the SAME asset_key syncBalances uses so
+// the API join lights up USD automatically. Tokens DefiLlama doesn't list stay
+// native-only.
 const syncTokenPrices = async (db: MetricsDb) => {
   const checkedAt = new Date().toISOString()
-  const byPlatform = new Map<string, Array<{ address: string; assetKey: string }>>()
+  const tokens: Array<{ assetKey: string; key: string }> = []
 
   for (const chain of getMainnetChains()) {
     if (!isCustomGasToken(chain.nativeToken)) continue
-    const platform = COINGECKO_PLATFORM[chain.parentChainId]
-    if (!platform) continue
-    const address = (chain.nativeToken as string).toLowerCase()
-    const assetKey = chain.nativeTokenSymbol || address
-    const list = byPlatform.get(platform) ?? []
-    list.push({ address, assetKey })
-    byPlatform.set(platform, list)
+    const key = llamaTokenKey(chain.parentChainId, chain.nativeToken as string)
+    if (!key) continue
+    const assetKey = chain.nativeTokenSymbol || (chain.nativeToken as string).toLowerCase()
+    tokens.push({ assetKey, key })
   }
+  if (!tokens.length) return
 
-  for (const [platform, tokens] of byPlatform) {
-    // per-platform isolation so one platform's failure/429 doesn't drop the rest
-    try {
-      const prices = await fetchTokenPricesUsd(platform, tokens.map(t => t.address))
-      for (const t of tokens) {
-        const usd = prices[t.address]?.usd
-        if (typeof usd !== 'number' || !Number.isFinite(usd) || usd <= 0 || usd > PRICE_SANITY_CEILING_USD) {
-          continue
-        }
-        await db.insertPrice({ assetKey: t.assetKey, priceUsd: usd, checkedAt })
-      }
-    } catch (error) {
-      console.error(`token price fetch failed for platform ${platform}`, error)
-    }
+  const coins = await fetchLlamaPrices(tokens.map(t => t.key))
+  for (const t of tokens) {
+    const usd = coins[t.key]?.price
+    if (!isSanePrice(usd)) continue
+    await db.insertPrice({ assetKey: t.assetKey, priceUsd: usd, checkedAt })
   }
 }
 
@@ -790,9 +753,9 @@ const RETRYABLE_ENRICH_LIMIT = Number(process.env.MONITOR_METRICS_RETRYABLE_LIMI
 
 // For each newly-indexed retryable, fetch its L1 creating tx receipt and derive
 // what it transfers (ERC-20 deposit / ETH deposit / value-less message). ERC-20
-// tokens are then priced via CoinGecko (by contract address on the parent
-// platform) under the token's address as asset_key, so the API join lights up
-// USD automatically. Worker-side only — no indexer involvement.
+// tokens are then priced via DefiLlama under the token's address as asset_key,
+// so the API join lights up USD automatically. Worker-side only — no indexer
+// involvement.
 const syncRetryableAssets = async (db: MetricsDb) => {
   const checkedAt = new Date().toISOString()
   const rows = await db.getUnenrichedRetryables(RETRYABLE_ENRICH_LIMIT)
@@ -801,8 +764,8 @@ const syncRetryableAssets = async (db: MetricsDb) => {
   const parentRpcUrls = getParentRpcUrls()
   const decimalsCache = new Map<string, number | null>()
   const symbolCache = new Map<string, string | null>()
-  // distinct ERC-20 token addresses to price, grouped by parent platform
-  const toPrice = new Map<string, Set<string>>()
+  // distinct ERC-20s to price: DefiLlama key -> token address (the asset_key)
+  const toPrice = new Map<string, string>()
 
   for (const row of rows) {
     const parentChainId = Number(row.parent_chain_id)
@@ -832,12 +795,8 @@ const syncRetryableAssets = async (db: MetricsDb) => {
         tokenDecimals = decimalsCache.get(tokenAddress) ?? null
         tokenSymbol = symbolCache.get(tokenAddress) ?? null
 
-        const platform = COINGECKO_PLATFORM[parentChainId]
-        if (platform) {
-          const set = toPrice.get(platform) ?? new Set<string>()
-          set.add(tokenAddress)
-          toPrice.set(platform, set)
-        }
+        const key = llamaTokenKey(parentChainId, tokenAddress)
+        if (key) toPrice.set(key, tokenAddress)
       } else if (transfer.kind === 'eth') {
         amountWei = transfer.amountWei.toString()
         tokenSymbol = 'ETH'
@@ -860,20 +819,18 @@ const syncRetryableAssets = async (db: MetricsDb) => {
     }
   }
 
-  // Price the ERC-20s we just saw (best-effort, per-platform isolation). Stored
-  // under the token address as asset_key so the API joins on it for USD.
-  for (const [platform, addresses] of toPrice) {
+  // Price the ERC-20s we just saw in one batched DefiLlama call. Stored under
+  // the token address as asset_key so the API joins on it for USD.
+  if (toPrice.size) {
     try {
-      const prices = await fetchTokenPricesUsd(platform, Array.from(addresses))
-      for (const address of addresses) {
-        const usd = prices[address]?.usd
-        if (typeof usd !== 'number' || !Number.isFinite(usd) || usd <= 0 || usd > PRICE_SANITY_CEILING_USD) {
-          continue
-        }
+      const coins = await fetchLlamaPrices(Array.from(toPrice.keys()))
+      for (const [key, address] of toPrice) {
+        const usd = coins[key]?.price
+        if (!isSanePrice(usd)) continue
         await db.insertPrice({ assetKey: address, priceUsd: usd, checkedAt })
       }
     } catch (error) {
-      console.error(`retryable token price fetch failed for platform ${platform}`, error)
+      console.error('retryable token price fetch failed', error)
     }
   }
 }
