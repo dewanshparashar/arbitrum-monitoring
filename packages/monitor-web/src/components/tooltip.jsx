@@ -105,7 +105,7 @@ export function Tip({ label, children, w = 240, underline = false, block = false
               borderRadius: 8,
               padding: '9px 11px',
               boxShadow: '0 12px 30px -8px rgba(0,0,0,0.7)',
-              fontFamily: 'var(--font)',
+              fontFamily: 'var(--mono)',
               fontSize: 12,
               lineHeight: 1.5,
               color: 'var(--text-2)',

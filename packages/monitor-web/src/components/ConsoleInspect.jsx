@@ -201,7 +201,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
             <ChainLogo chain={c} size={42} />
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                <span style={{ fontSize: 18, fontWeight: 600, color: '#fff', fontFamily: 'var(--font)' }}>{c.name}</span>
+                <span style={{ fontSize: 18, fontWeight: 600, color: '#fff', fontFamily: 'var(--mono)' }}>{c.name}</span>
                 <span style={{ color: stColor[c.health] }}>
                   {c.health === 'crit' ? '✖ outage' : c.health === 'warn' ? '◆ degraded' : c.health === 'idle' ? '○ unknown' : '● operational'}
                 </span>
@@ -507,7 +507,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                         <div style={{ color: a.sev === 'crit' ? C.crit : C.warn }}>
                           {a.title} <span style={{ color: C.com }}>· {a.monitor}</span>
                         </div>
-                        <div style={{ color: C.com, fontSize: 11.5, marginTop: 2, fontFamily: 'var(--font)', lineHeight: 1.45 }}>{a.detail}</div>
+                        <div style={{ color: C.com, fontSize: 11.5, marginTop: 2, fontFamily: 'var(--mono)', lineHeight: 1.45 }}>{a.detail}</div>
                         {tx && tx.h && (
                           <div style={{ marginTop: 4, fontSize: 11 }}>
                             <Ext chainId={tx.cid} hash={tx.h} tip="View the related transaction">

@@ -57,7 +57,8 @@
 
 body {
   margin: 0;
-  font-family: var(--font);
+  /* terminal aesthetic — mono everywhere for consistency (incl. portals/modals) */
+  font-family: var(--mono);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
