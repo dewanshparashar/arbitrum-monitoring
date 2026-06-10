@@ -22,6 +22,31 @@ export function BlinkCursor({ color = '#3DD68C', h = 15 }) {
 // Chain logo badge — colored rounded square with initial
 export function ChainLogo({ chain, size = 30 }) {
   const initial = chain.name.replace(/[^A-Za-z0-9]/g, '').slice(0, 1).toUpperCase()
+  // render the real portal logo when available; fall back to the initial avatar
+  // on missing/broken image (reset the failure flag when the chain changes)
+  const [failed, setFailed] = React.useState(false)
+  React.useEffect(() => setFailed(false), [chain.logo])
+
+  if (chain.logo && !failed) {
+    return (
+      <img
+        src={chain.logo}
+        alt={`${chain.name} logo`}
+        width={size}
+        height={size}
+        onError={() => setFailed(true)}
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size * 0.3,
+          flex: 'none',
+          objectFit: 'cover',
+          background: '#0E121B',
+          boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.08), 0 2px 6px ${chain.color}40`,
+        }}
+      />
+    )
+  }
   return (
     <div
       style={{

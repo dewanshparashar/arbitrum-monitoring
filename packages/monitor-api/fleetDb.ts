@@ -22,6 +22,8 @@ type PortalMainnetChain = {
   nativeToken?: string
   nativeTokenSymbol?: string | null
   nativeTokenName?: string | null
+  logo?: string | null
+  color?: string | null
   bridgeUiConfig: {
     assertionIntervalSeconds: number | null
     fastWithdrawalTime: number | null
@@ -133,6 +135,8 @@ type FleetChain = {
   latencyMs: number | null
   raasProvider: string | null
   rpcHost: string | null
+  logoUrl: string | null
+  brandColor: string | null
   nativeAssetKey: string | null
   gasTokenSymbol: string | null
   gasTokenAddress: string | null
@@ -384,6 +388,8 @@ const loadPortalSnapshot = () => {
     nativeToken?: string
     nativeTokenSymbol?: string
     nativeTokenName?: string
+    logo?: string
+    color?: string
   }> = {}
   try {
     extra = JSON.parse(fs.readFileSync(getPortalExtraPath(), 'utf8'))
@@ -400,6 +406,8 @@ const loadPortalSnapshot = () => {
       nativeToken: e.nativeToken,
       nativeTokenSymbol: e.nativeTokenSymbol ?? null,
       nativeTokenName: e.nativeTokenName ?? null,
+      logo: e.logo ?? null,
+      color: e.color ?? null,
     }
   })
 
@@ -748,6 +756,8 @@ export class FleetDb {
           latencyMs: rpc?.latency_ms ?? null,
           raasProvider: inferRaasProvider(chain.rpcUrl),
           rpcHost: hostOf(chain.rpcUrl),
+          logoUrl: chain.logo ?? null,
+          brandColor: chain.color ?? null,
           nativeAssetKey: balance?.asset_key ?? null,
           gasTokenSymbol: chain.nativeTokenSymbol ?? null,
           gasTokenAddress: chain.nativeToken ?? null,

@@ -86,6 +86,9 @@ const pickChainExtra = chain => {
     if (nativeTokenData.symbol) extra.nativeTokenSymbol = nativeTokenData.symbol
     if (nativeTokenData.name) extra.nativeTokenName = nativeTokenData.name
   }
+  const logo = chain.bridgeUiConfig?.network?.logo || chain.bridgeUiConfig?.nativeTokenData?.logoUrl
+  if (logo) extra.logo = logo
+  if (chain.bridgeUiConfig?.color) extra.color = chain.bridgeUiConfig.color
   return extra
 }
 

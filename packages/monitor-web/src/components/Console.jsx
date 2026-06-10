@@ -359,8 +359,14 @@ export function Console() {
                 key={c.id}
                 style={{ cursor: 'pointer', ...rowNoWrap }}
                 onClick={() => setSelected(c)}
-                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.035)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                  e.currentTarget.style.boxShadow = `inset 3px 0 0 ${c.color}`
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.boxShadow = 'none'
+                }}
               >
                 <Gutter n={ln} />
                 <span style={col(150)}>

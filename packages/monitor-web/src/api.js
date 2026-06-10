@@ -78,6 +78,12 @@ const colorFor = chainId => {
   return hslToHex(x % 360, 68, 58)
 }
 
+// Portal logo paths are relative (e.g. /images/XaiLogo.svg), served by the
+// Arbitrum portal. Resolve to an absolute URL; pass through if already absolute.
+const LOGO_BASE = 'https://portal.arbitrum.io'
+const resolveLogo = u =>
+  !u ? null : /^https?:\/\//.test(u) ? u : LOGO_BASE + (u.startsWith('/') ? u : '/' + u)
+
 // batch target window, mirrors fleetDb.getBatchStatus()
 const batchTargetMins = assertionIntervalSeconds => {
   const target = Math.max(
@@ -111,6 +117,8 @@ export const toViewChain = c => {
     name: c.chainName,
     chainId: c.chainId,
     color: colorFor(c.chainId),
+    logo: resolveLogo(c.logoUrl), // real chain logo from the portal config
+    brandColor: c.brandColor || null,
     parent: c.parentChainName,
     parentChainId: c.parentChainId,
     transport, // 'Rollup' | 'AnyTrust' | 'Unknown'
