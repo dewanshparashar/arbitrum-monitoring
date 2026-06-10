@@ -427,6 +427,7 @@ export class FleetDb {
   private readonly exitsTable: string
   private readonly workerStateTable: string
   private readonly chainRuntimeTable: string
+  private readonly retryableAssetsTable: string
 
   constructor(connectionString: string, schemaName = process.env.DATABASE_SCHEMA) {
     const schema = normalizeSchemaName(schemaName)
@@ -443,6 +444,7 @@ export class FleetDb {
     this.exitsTable = tableName(schema, 'exit_messages')
     this.workerStateTable = tableName(schema, 'metric_worker_state')
     this.chainRuntimeTable = tableName(schema, 'chain_runtime')
+    this.retryableAssetsTable = tableName(schema, 'retryable_assets')
   }
 
   async healthCheck() {
@@ -469,6 +471,52 @@ export class FleetDb {
       }
 
       throw error
+    }
+  }
+
+  // Recent retryable tickets joined with the worker's per-ticket asset
+  // enrichment (token + amount) and the latest USD price for that asset. Falls
+  // back to the plain ticket list if the enrichment table/columns aren't there
+  // yet (worker not deployed), so retryables always render.
+  private async readRetryables(chainId: number) {
+    const enriched = `
+      select
+        rt.*,
+        ra.kind as asset_kind,
+        ra.token_address as asset_token,
+        ra.token_symbol as asset_symbol,
+        ra.token_decimals as asset_decimals,
+        ra.amount_wei::text as asset_amount_wei,
+        p.price_usd as asset_price_usd
+      from ${this.retryableTicketsTable} rt
+      left join ${this.retryableAssetsTable} ra on ra.id = rt.id
+      left join lateral (
+        select price_usd
+        from ${this.pricesTable} ap
+        where ap.asset_key = case when ra.kind = 'eth' then 'ethereum' else ra.token_address end
+        order by checked_at desc
+        limit 1
+      ) p on true
+      where rt.chain_id = $1
+      order by rt.parent_block_timestamp desc, rt.log_index desc
+      limit 25
+    `
+    try {
+      return await this.pool.query(enriched, [chainId])
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code !== '42P01' && code !== '42703') throw error
+      // enrichment not available yet — return tickets without asset columns
+      return this.pool.query(
+        `
+          select *
+          from ${this.retryableTicketsTable}
+          where chain_id = $1
+          order by parent_block_timestamp desc, log_index desc
+          limit 25
+        `,
+        [chainId]
+      )
     }
   }
 
@@ -835,16 +883,7 @@ export class FleetDb {
           `,
           [chainId]
         ),
-        this.pool.query(
-          `
-            select *
-            from ${this.retryableTicketsTable}
-            where chain_id = $1
-            order by parent_block_timestamp desc, log_index desc
-            limit 25
-          `,
-          [chainId]
-        ),
+        this.readRetryables(chainId),
         // RPC probe history bucketed across the FULL available window (up to the
         // 8-day prune horizon) into a fixed number of bars, so the chart spans
         // all probes in the DB regardless of probe interval — not just the last

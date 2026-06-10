@@ -74,9 +74,9 @@ Practical substitutions already made (no backend change needed):
 | Field | Status | Where it would come from |
 | --- | --- | --- |
 | Open / expiring / expired counts, ticket list | ✅ live | `retryable_tickets` |
+| Per-ticket token + amount + USD | ✅ live | worker enriches each ticket from its L1 creating tx: `DepositInitiated` (ERC-20 deposits → token + amount) or the `InboxMessageDelivered` payload's l2CallValue (native ETH deposits); priced via CoinGecko by contract address on the parent platform → `retryable_assets` + `asset_prices`. Generic (value-less) messages shown as `message`. Best-effort: exotic gateways / unlisted tokens fall back to no value or native-only. |
 | **Triage state** (Untriaged / Investigating / Resolved) | ❌ gap | lives in the Notion board the reference retryable-monitor syncs to; not indexed |
 | **Redeemed / failed in 24h** | ❌ gap | needs child-chain redemption events (`RedeemScheduled` / `TicketRedeemed` / `AutoRedemptionFailed`) indexed |
-| Per-ticket value / callvalue / token deposit | ❌ gap | not in the current `retryable_tickets` columns |
 
 ### contracts
 | Field | Status | Notes |

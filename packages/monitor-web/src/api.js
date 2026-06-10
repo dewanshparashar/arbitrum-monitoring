@@ -382,6 +382,20 @@ export const fetchChainDetail = async chainId => {
       remaining <= 0 ? 'Expired' : remaining <= 2 * 86400 ? 'Expiring' : 'Pending'
     const stKind =
       state === 'Expired' ? 'crit' : state === 'Expiring' ? 'warn' : 'open'
+    // worker-derived: what the ticket is moving (erc20 / eth / message)
+    let asset = null
+    if (r.asset_kind) {
+      const dec = r.asset_decimals != null ? Number(r.asset_decimals) : 18
+      const amount =
+        r.asset_amount_wei != null ? Number(r.asset_amount_wei) / 10 ** dec : null
+      const price = r.asset_price_usd != null ? Number(r.asset_price_usd) : null
+      asset = {
+        kind: r.asset_kind,
+        symbol: r.asset_symbol || (r.asset_kind === 'eth' ? 'ETH' : null),
+        amount,
+        usd: amount != null && price != null ? amount * price : null,
+      }
+    }
     return {
       hash: r.transaction_hash,
       messageIndex: r.message_index,
@@ -389,6 +403,7 @@ export const fetchChainDetail = async chainId => {
       expiresAt: exp,
       state,
       stKind,
+      asset,
     }
   })
 

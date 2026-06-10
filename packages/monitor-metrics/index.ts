@@ -12,7 +12,9 @@ import {
   getBlockTxStats,
   getErc20Balance,
   getErc20Decimals,
+  getErc20Symbol,
   getLogs,
+  getRetryableTransfer,
   getRollupBaseStake,
   getTransactionFeeWei,
   getTransactionSender,
@@ -70,6 +72,8 @@ class MetricsDb {
   private readonly exitsTable: string
   private readonly chainRuntimeTable: string
   private readonly batchDeliveriesTable: string
+  private readonly retryableTicketsTable: string
+  private readonly retryableAssetsTable: string
 
   constructor(connectionString: string, schemaName: string) {
     this.pool = new Pool({
@@ -85,6 +89,9 @@ class MetricsDb {
     this.chainRuntimeTable = tableName(this.schemaName, 'chain_runtime')
     // indexer-owned table, read-only here, to find recent batch tx hashes
     this.batchDeliveriesTable = tableName(this.schemaName, 'batch_deliveries')
+    // indexer-owned (read-only); we enrich each ticket with what it transfers
+    this.retryableTicketsTable = tableName(this.schemaName, 'retryable_tickets')
+    this.retryableAssetsTable = tableName(this.schemaName, 'retryable_assets')
   }
 
   async init() {
@@ -176,6 +183,87 @@ class MetricsDb {
     ]) {
       await this.pool.query(`alter table ${this.chainRuntimeTable} add column if not exists ${col}`)
     }
+    // What each indexed retryable ticket is moving (token + amount), derived
+    // from its L1 creating tx. One row per ticket id, enriched once.
+    await this.pool.query(`
+      create table if not exists ${this.retryableAssetsTable} (
+        id text primary key,
+        chain_id bigint not null,
+        parent_chain_id bigint not null,
+        kind text not null,
+        token_address text,
+        token_symbol text,
+        token_decimals integer,
+        amount_wei numeric(78, 0),
+        checked_at timestamptz not null
+      )
+    `)
+  }
+
+  // Indexed retryable tickets that haven't been enriched yet (newest first),
+  // bounded per cycle. Tolerates a missing indexer table (42P01) before the
+  // indexer has created it.
+  async getUnenrichedRetryables(limit: number) {
+    try {
+      const result = await this.pool.query<{
+        id: string
+        chain_id: string
+        parent_chain_id: string
+        transaction_hash: string
+      }>(
+        `
+          select rt.id, rt.chain_id, rt.parent_chain_id, rt.transaction_hash
+          from ${this.retryableTicketsTable} rt
+          left join ${this.retryableAssetsTable} ra on ra.id = rt.id
+          where ra.id is null
+          order by rt.parent_block_timestamp desc, rt.log_index desc
+          limit $1
+        `,
+        [limit]
+      )
+      return result.rows
+    } catch (error) {
+      if ((error as { code?: string }).code === '42P01') return []
+      throw error
+    }
+  }
+
+  async upsertRetryableAsset(row: {
+    id: string
+    chainId: number
+    parentChainId: number
+    kind: string
+    tokenAddress: string | null
+    tokenSymbol: string | null
+    tokenDecimals: number | null
+    amountWei: string | null
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.retryableAssetsTable}
+          (id, chain_id, parent_chain_id, kind, token_address, token_symbol, token_decimals, amount_wei, checked_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        on conflict (id) do update
+        set kind = excluded.kind,
+            token_address = excluded.token_address,
+            token_symbol = excluded.token_symbol,
+            token_decimals = excluded.token_decimals,
+            amount_wei = excluded.amount_wei,
+            checked_at = excluded.checked_at
+      `,
+      [
+        row.id,
+        row.chainId,
+        row.parentChainId,
+        row.kind,
+        row.tokenAddress,
+        row.tokenSymbol,
+        row.tokenDecimals,
+        row.amountWei,
+        row.checkedAt,
+      ]
+    )
   }
 
   async getState(key: string) {
@@ -448,6 +536,15 @@ class MetricsDb {
     await this.pool.query(
       `delete from ${this.exitsTable} where started_at < now() - interval '8 days'`
     )
+    // drop enrichment for tickets the indexer has aged out of its window
+    try {
+      await this.pool.query(
+        `delete from ${this.retryableAssetsTable} ra
+         where not exists (select 1 from ${this.retryableTicketsTable} rt where rt.id = ra.id)`
+      )
+    } catch (error) {
+      if ((error as { code?: string }).code !== '42P01') throw error
+    }
   }
 
   async close() {
@@ -643,6 +740,100 @@ const syncTokenPrices = async (db: MetricsDb) => {
       }
     } catch (error) {
       console.error(`token price fetch failed for platform ${platform}`, error)
+    }
+  }
+}
+
+// Max retryable tickets to enrich per cycle, bounding RPC work (receipt fetch +
+// token reads). Unenriched tickets are picked up on later cycles.
+const RETRYABLE_ENRICH_LIMIT = Number(process.env.MONITOR_METRICS_RETRYABLE_LIMIT || 60)
+
+// For each newly-indexed retryable, fetch its L1 creating tx receipt and derive
+// what it transfers (ERC-20 deposit / ETH deposit / value-less message). ERC-20
+// tokens are then priced via CoinGecko (by contract address on the parent
+// platform) under the token's address as asset_key, so the API join lights up
+// USD automatically. Worker-side only — no indexer involvement.
+const syncRetryableAssets = async (db: MetricsDb) => {
+  const checkedAt = new Date().toISOString()
+  const rows = await db.getUnenrichedRetryables(RETRYABLE_ENRICH_LIMIT)
+  if (!rows.length) return
+
+  const parentRpcUrls = getParentRpcUrls()
+  const decimalsCache = new Map<string, number | null>()
+  const symbolCache = new Map<string, string | null>()
+  // distinct ERC-20 token addresses to price, grouped by parent platform
+  const toPrice = new Map<string, Set<string>>()
+
+  for (const row of rows) {
+    const parentChainId = Number(row.parent_chain_id)
+    try {
+      const parentRpcUrl = parentRpcUrls[parentChainId]
+      if (!parentRpcUrl) continue
+
+      const transfer = await getRetryableTransfer(parentRpcUrl, row.transaction_hash)
+
+      let tokenAddress: string | null = null
+      let tokenSymbol: string | null = null
+      let tokenDecimals: number | null = null
+      let amountWei: string | null = null
+
+      if (transfer.kind === 'erc20') {
+        tokenAddress = transfer.token
+        amountWei = transfer.amountWei.toString()
+        if (!decimalsCache.has(tokenAddress)) {
+          decimalsCache.set(
+            tokenAddress,
+            await getErc20Decimals(parentRpcUrl, tokenAddress).catch(() => null)
+          )
+        }
+        if (!symbolCache.has(tokenAddress)) {
+          symbolCache.set(tokenAddress, await getErc20Symbol(parentRpcUrl, tokenAddress))
+        }
+        tokenDecimals = decimalsCache.get(tokenAddress) ?? null
+        tokenSymbol = symbolCache.get(tokenAddress) ?? null
+
+        const platform = COINGECKO_PLATFORM[parentChainId]
+        if (platform) {
+          const set = toPrice.get(platform) ?? new Set<string>()
+          set.add(tokenAddress)
+          toPrice.set(platform, set)
+        }
+      } else if (transfer.kind === 'eth') {
+        amountWei = transfer.amountWei.toString()
+        tokenSymbol = 'ETH'
+        tokenDecimals = 18
+      }
+
+      await db.upsertRetryableAsset({
+        id: row.id,
+        chainId: Number(row.chain_id),
+        parentChainId,
+        kind: transfer.kind,
+        tokenAddress,
+        tokenSymbol,
+        tokenDecimals,
+        amountWei,
+        checkedAt,
+      })
+    } catch (error) {
+      console.error(`retryable enrich failed for ${row.transaction_hash}`, error)
+    }
+  }
+
+  // Price the ERC-20s we just saw (best-effort, per-platform isolation). Stored
+  // under the token address as asset_key so the API joins on it for USD.
+  for (const [platform, addresses] of toPrice) {
+    try {
+      const prices = await fetchTokenPricesUsd(platform, Array.from(addresses))
+      for (const address of addresses) {
+        const usd = prices[address]?.usd
+        if (typeof usd !== 'number' || !Number.isFinite(usd) || usd <= 0 || usd > PRICE_SANITY_CEILING_USD) {
+          continue
+        }
+        await db.insertPrice({ assetKey: address, priceUsd: usd, checkedAt })
+      }
+    } catch (error) {
+      console.error(`retryable token price fetch failed for platform ${platform}`, error)
     }
   }
 }
@@ -1017,6 +1208,7 @@ const runCycle = async (db: MetricsDb, chunkSize: number) => {
   await stage('chain runtime', () => syncChainRuntime(db))
   await stage('parent heads', () => syncParentHeads(db))
   await stage('exit sync', () => syncExitMessages(db, chunkSize))
+  await stage('retryable assets', () => syncRetryableAssets(db))
   await stage('prune', () => db.prune())
 
   return { failed }

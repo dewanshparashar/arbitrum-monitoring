@@ -122,6 +122,7 @@ export const whyRetryable = c => {
       <Rule>
         Tickets live {THRESHOLDS.retryableLifetimeDays} days. any expired (timeout passed) → <span style={{ color: COL.crit }}>critical</span>;
         {' '}any expiring within {THRESHOLDS.retryableExpiringWindowHours}h, or any open ticket → <span style={{ color: COL.warn }}>warning</span>; else healthy.
+        <br />Each ticket's token + amount is decoded from its L1 creating tx (gateway <code>DepositInitiated</code> for ERC-20s, the inbox payload's l2CallValue for ETH) and priced live; generic value-less messages show <code>message</code>.
         <br />Triage state (Untriaged/Investigating) lives in Notion, not indexed.
       </Rule>
     </span>

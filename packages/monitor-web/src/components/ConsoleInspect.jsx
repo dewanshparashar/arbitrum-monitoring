@@ -473,8 +473,22 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                           {t.hash ? t.hash.slice(0, 10) + '…' + t.hash.slice(-6) : `msg #${t.messageIndex}`}
                         </Ext>
                       </span>
-                      <span style={{ color: stColor[t.stKind] || C.num, width: 90 }}>{t.state}</span>
-                      <span style={{ color: C.com, flex: 1 }}>created {F.ago(t.createdAt)}</span>
+                      <span style={{ color: stColor[t.stKind] || C.num, width: 78 }}>{t.state}</span>
+                      <span style={{ flex: 1, color: C.txt }}>
+                        {t.asset && t.asset.amount != null ? (
+                          <Tip w={260} label={`Token bridged by this retryable, decoded from its L1 creating transaction (${t.asset.kind === 'erc20' ? 'gateway deposit' : 'native ETH deposit'}). USD ${t.asset.usd != null ? 'from a live CoinGecko price feed.' : 'unavailable — no price feed for this token.'}`}>
+                            <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>
+                              {F.compact(t.asset.amount, t.asset.symbol || '')}
+                              {t.asset.usd != null ? <span style={{ color: C.com }}> ({F.money(t.asset.usd)})</span> : null}
+                            </span>
+                          </Tip>
+                        ) : t.asset && t.asset.kind === 'message' ? (
+                          <span style={{ color: C.com }}>message · no token</span>
+                        ) : (
+                          <span style={{ color: C.com }}>·</span>
+                        )}
+                      </span>
+                      <span style={{ color: C.com }}>created {F.ago(t.createdAt)}</span>
                       <span style={{ color: t.stKind === 'crit' ? C.crit : C.com }}>
                         {t.expiresAt <= Math.floor(Date.now() / 1000) ? 'expired' : 'timeout ' + F.until(t.expiresAt)}
                       </span>

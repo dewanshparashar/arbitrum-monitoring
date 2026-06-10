@@ -36,6 +36,21 @@ const outboxInterface = new ethers.utils.Interface([
   'event OutBoxTransactionExecuted(address indexed to, address indexed l2Sender, uint256 indexed zero, uint256 transactionIndex)',
 ])
 
+// L1 token gateways emit DepositInitiated in the same tx that creates the
+// deposit retryable — l1Token + _amount identify the ERC-20 being bridged.
+const gatewayInterface = new ethers.utils.Interface([
+  'event DepositInitiated(address l1Token, address indexed _from, address indexed _to, uint256 indexed _sequenceNumber, uint256 _amount)',
+])
+// The Inbox emits InboxMessageDelivered alongside the retryable; its `data` is
+// the ABI-packed submitRetryable params — word[1] is l2CallValue (the ETH the
+// recipient receives on L2), the meaningful value for a plain ETH deposit.
+const inboxMsgInterface = new ethers.utils.Interface([
+  'event InboxMessageDelivered(uint256 indexed messageNum, bytes data)',
+])
+const erc20MetaInterface = new ethers.utils.Interface([
+  'function symbol() view returns (string)',
+])
+
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 // Single JSON-RPC attempt with a hard timeout.
@@ -252,6 +267,81 @@ export const getValidatorWhitelistDisabled = async (rpcUrl: string, rollup: stri
     retries: 1,
   })
   return Boolean(rollupInfoInterface.decodeFunctionResult('validatorWhitelistDisabled', result)[0])
+}
+
+const depositInitiatedTopic = gatewayInterface.getEventTopic('DepositInitiated')
+const inboxMessageDeliveredTopic = inboxMsgInterface.getEventTopic('InboxMessageDelivered')
+
+// What a retryable ticket is actually moving, derived from its L1 creating tx:
+// - erc20: a standard token-gateway deposit (DepositInitiated) → token + amount
+// - eth:   a plain native deposit → l2CallValue from the inbox payload
+// - message: a generic cross-chain call carrying no value
+export type RetryableTransfer =
+  | { kind: 'erc20'; token: string; amountWei: bigint }
+  | { kind: 'eth'; amountWei: bigint }
+  | { kind: 'message' }
+
+export const getRetryableTransfer = async (
+  rpcUrl: string,
+  txHash: string
+): Promise<RetryableTransfer> => {
+  const receipt = await rpcCall<{ logs?: RpcLog[] } | null>(
+    rpcUrl,
+    'eth_getTransactionReceipt',
+    [txHash],
+    { retries: 1 }
+  )
+  const logs = receipt?.logs ?? []
+
+  // Prefer a token-gateway deposit: it names the ERC-20 directly.
+  for (const log of logs) {
+    if (log.topics[0]?.toLowerCase() !== depositInitiatedTopic.toLowerCase()) continue
+    try {
+      const parsed = gatewayInterface.parseLog(log)
+      return {
+        kind: 'erc20',
+        token: String(parsed.args.l1Token).toLowerCase(),
+        amountWei: BigInt(parsed.args._amount.toString()),
+      }
+    } catch {
+      // not a standard gateway event shape — fall through
+    }
+  }
+
+  // Otherwise decode the inbox payload's l2CallValue (the bridged ETH).
+  for (const log of logs) {
+    if (log.topics[0]?.toLowerCase() !== inboxMessageDeliveredTopic.toLowerCase()) continue
+    try {
+      const parsed = inboxMsgInterface.parseLog(log)
+      const data: string = parsed.args.data
+      const hex = data.startsWith('0x') ? data.slice(2) : data
+      // word[0] = to, word[1] = l2CallValue (each 32 bytes, packed)
+      if (hex.length >= 128) {
+        const l2CallValue = BigInt('0x' + hex.slice(64, 128))
+        if (l2CallValue > 0n) return { kind: 'eth', amountWei: l2CallValue }
+      }
+    } catch {
+      // unexpected payload — treat as a value-less message
+    }
+    return { kind: 'message' }
+  }
+
+  return { kind: 'message' }
+}
+
+// ERC-20 symbol; null if the token doesn't implement a string symbol() (some
+// legacy tokens use bytes32 — not worth special-casing for this best-effort label).
+export const getErc20Symbol = async (rpcUrl: string, token: string) => {
+  try {
+    const data = erc20MetaInterface.encodeFunctionData('symbol')
+    const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: token, data }, 'latest'], {
+      retries: 1,
+    })
+    const symbol = String(erc20MetaInterface.decodeFunctionResult('symbol', result)[0]).trim()
+    return symbol || null
+  } catch {
+    return null
+  }
 }
 
 export const getErc20Decimals = async (rpcUrl: string, token: string) => {
