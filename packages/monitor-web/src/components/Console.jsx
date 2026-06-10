@@ -28,6 +28,49 @@ const order = { crit: 0, warn: 1, idle: 2, ok: 3 }
 
 const POLL_MS = 30_000
 
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const BANNER = [
+  '  ▄▀█ █▀█ █▄▄   █▀▄▀█ █▀█ █▄░█ █ ▀█▀ █▀█ █▀█',
+  '  █▀█ █▀▄ █▄█   █░▀░█ █▄█ █░▀█ █ ░█░ █▄█ █▀▄',
+]
+
+// terminal boot splash shown while the first fleet fetch is in flight
+function Splash({ frame, error }) {
+  const C2 = { com: '#5A6478', str: '#3DD68C', warn: '#F5B544', crit: '#FF5C6C', num: '#12AAFF', fn: '#82AAFF' }
+  const lines = [
+    ['initializing fleet register', 'ok'],
+    ['loading portal snapshot · mainnet orbit chains', 'ok'],
+    ['connecting to indexer @ hetzner-fsn1', error ? 'fail' : 'pend'],
+    ['fetching fleet overview + chain health', error ? 'skip' : 'pend'],
+  ]
+  return (
+    <div style={{ padding: '40px 18px', fontFamily: 'var(--mono)' }}>
+      <pre style={{ margin: 0, lineHeight: 1.15, fontSize: 13, color: 'var(--arb-cyan)', textShadow: '0 0 18px rgba(18,170,255,0.35)' }}>
+        {BANNER.join('\n')}
+      </pre>
+      <div style={{ color: 'var(--text-4)', fontSize: 12, margin: '6px 0 24px 2px', letterSpacing: '0.14em' }}>
+        FLEET WATCH · INDEXED 8-DAY WINDOW
+      </div>
+      <div style={{ fontSize: 12.5, lineHeight: '24px' }}>
+        {lines.map(([label, state], i) => (
+          <div key={i} style={{ color: C2.com }}>
+            <span style={{ color: state === 'fail' ? C2.crit : C2.str, marginRight: 10 }}>
+              {state === 'ok' ? '✓' : state === 'fail' ? '✖' : state === 'skip' ? '·' : SPINNER[frame]}
+            </span>
+            {label}
+            {' '}
+            <span style={{ color: C2.com }}>{'.'.repeat(Math.max(0, 44 - label.length))}</span>{' '}
+            {state === 'ok' && <span style={{ color: C2.str }}>ok</span>}
+            {state === 'fail' && <span style={{ color: C2.crit }}>failed</span>}
+            {state === 'pend' && <span style={{ color: C2.warn }}>…</span>}
+          </div>
+        ))}
+        {error && <div style={{ color: C2.crit, marginTop: 14 }}>! {error}</div>}
+      </div>
+    </div>
+  )
+}
+
 const heartbeatChar = v =>
   v == null ? '·' : v >= 99.5 ? '▁' : v >= 99 ? '▃' : v >= 97 ? '▅' : v >= 90 ? '▆' : '█'
 
@@ -40,10 +83,15 @@ export function Console() {
   const [cursor, setCursor] = React.useState(true)
   const [selected, setSelected] = React.useState(null)
   const [showLegend, setShowLegend] = React.useState(false)
+  const [frame, setFrame] = React.useState(0)
 
   React.useEffect(() => {
     const t = setInterval(() => setCursor(c => !c), 530)
-    return () => clearInterval(t)
+    const s = setInterval(() => setFrame(f => (f + 1) % SPINNER.length), 90)
+    return () => {
+      clearInterval(t)
+      clearInterval(s)
+    }
   }, [])
 
   React.useEffect(() => {
@@ -131,6 +179,9 @@ export function Console() {
 
       {/* terminal body */}
       <div style={{ padding: '16px 18px 6px', flex: 1, ...mono, color: C.txt, overflowX: 'auto' }}>
+        {status === 'loading' && chains.length === 0 ? (
+          <Splash frame={frame} error={null} />
+        ) : (
         <div style={{ minWidth: 1020 }}>
           {/* command + boot log */}
           <div style={{ marginBottom: 14 }}>
@@ -254,6 +305,7 @@ export function Console() {
             <span style={{ display: 'inline-block', width: 8, height: 15, background: cursor ? C.str : 'transparent', verticalAlign: 'text-bottom', transform: 'translateY(2px)' }} />
           </div>
         </div>
+        )}
       </div>
 
       {/* status bar (VS Code style) */}
