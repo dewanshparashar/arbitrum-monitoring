@@ -228,6 +228,21 @@ class MetricsDb {
     }
   }
 
+  // Removes retryable enrichment rows that an earlier build mislabeled as ETH
+  // on custom-gas-token chains (the L2 native there is the gas token, not ETH).
+  // They then re-enrich with the correct asset. No-op once corrected.
+  async clearMislabeledNativeRetryables(chainIds: number[]) {
+    if (!chainIds.length) return
+    try {
+      await this.pool.query(
+        `delete from ${this.retryableAssetsTable} where kind = 'eth' and chain_id = any($1::bigint[])`,
+        [chainIds]
+      )
+    } catch (error) {
+      if ((error as { code?: string }).code !== '42P01') throw error
+    }
+  }
+
   async upsertRetryableAsset(row: {
     id: string
     chainId: number
@@ -758,6 +773,14 @@ const RETRYABLE_ENRICH_LIMIT = Number(process.env.MONITOR_METRICS_RETRYABLE_LIMI
 // involvement.
 const syncRetryableAssets = async (db: MetricsDb) => {
   const checkedAt = new Date().toISOString()
+
+  // Re-enrich any custom-gas-token tickets a prior build mislabeled as ETH.
+  await db.clearMislabeledNativeRetryables(
+    getMainnetChains()
+      .filter(chain => isCustomGasToken(chain.nativeToken))
+      .map(chain => chain.chainId)
+  )
+
   const rows = await db.getUnenrichedRetryables(RETRYABLE_ENRICH_LIMIT)
   if (!rows.length) return
 
@@ -766,6 +789,7 @@ const syncRetryableAssets = async (db: MetricsDb) => {
   const symbolCache = new Map<string, string | null>()
   // distinct ERC-20s to price: DefiLlama key -> token address (the asset_key)
   const toPrice = new Map<string, string>()
+  const chainsById = new Map(getMainnetChains().map(chain => [chain.chainId, chain]))
 
   for (const row of rows) {
     const parentChainId = Number(row.parent_chain_id)
@@ -774,7 +798,9 @@ const syncRetryableAssets = async (db: MetricsDb) => {
       if (!parentRpcUrl) continue
 
       const transfer = await getRetryableTransfer(parentRpcUrl, row.transaction_hash)
+      const chain = chainsById.get(Number(row.chain_id))
 
+      let kind: string = transfer.kind
       let tokenAddress: string | null = null
       let tokenSymbol: string | null = null
       let tokenDecimals: number | null = null
@@ -798,16 +824,28 @@ const syncRetryableAssets = async (db: MetricsDb) => {
         const key = llamaTokenKey(parentChainId, tokenAddress)
         if (key) toPrice.set(key, tokenAddress)
       } else if (transfer.kind === 'eth') {
+        // The retryable's l2CallValue is denominated in the chain's L2 native
+        // currency (always 18 decimals). On a custom-gas-token chain that is the
+        // gas token (e.g. H), NOT ETH — so price it against the gas token and
+        // label it correctly instead of mislabeling it ETH.
         amountWei = transfer.amountWei.toString()
-        tokenSymbol = 'ETH'
         tokenDecimals = 18
+        if (chain && isCustomGasToken(chain.nativeToken)) {
+          kind = 'native'
+          tokenAddress = (chain.nativeToken as string).toLowerCase()
+          tokenSymbol = chain.nativeTokenSymbol || tokenAddress
+          const key = llamaTokenKey(chain.parentChainId, chain.nativeToken as string)
+          if (key) toPrice.set(key, tokenAddress)
+        } else {
+          tokenSymbol = 'ETH'
+        }
       }
 
       await db.upsertRetryableAsset({
         id: row.id,
         chainId: Number(row.chain_id),
         parentChainId,
-        kind: transfer.kind,
+        kind,
         tokenAddress,
         tokenSymbol,
         tokenDecimals,
