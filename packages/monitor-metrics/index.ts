@@ -552,18 +552,37 @@ class MetricsDb {
   }
 }
 
-const readJson = async <T>(url: string) => {
-  const response = await fetch(url)
+// CoinGecko access. The keyless public API allows only ONE contract address
+// per token_price request and rate-limits hard (~5 req/min) — so without a key
+// we fetch one token at a time, throttled. A free Demo key (COINGECKO_API_KEY)
+// or a Pro key (COINGECKO_PRO_API_KEY) lifts both limits and lets us batch.
+const COINGECKO_DEMO_KEY = process.env.COINGECKO_API_KEY || process.env.COINGECKO_DEMO_API_KEY
+const COINGECKO_PRO_KEY = process.env.COINGECKO_PRO_API_KEY
+const COINGECKO_HAS_KEY = Boolean(COINGECKO_DEMO_KEY || COINGECKO_PRO_KEY)
+const COINGECKO_BASE = COINGECKO_PRO_KEY
+  ? 'https://pro-api.coingecko.com/api/v3'
+  : 'https://api.coingecko.com/api/v3'
+// Spacing between keyless requests to stay under the public rate limit. Ignored
+// when a key is set (we batch instead). Generous default; one cycle has time.
+const COINGECKO_THROTTLE_MS = Number(process.env.MONITOR_METRICS_COINGECKO_THROTTLE_MS || 2600)
+
+const coingeckoHeaders = (): Record<string, string> => {
+  if (COINGECKO_PRO_KEY) return { 'x-cg-pro-api-key': COINGECKO_PRO_KEY }
+  if (COINGECKO_DEMO_KEY) return { 'x-cg-demo-api-key': COINGECKO_DEMO_KEY }
+  return {}
+}
+
+const cgGet = async <T>(path: string): Promise<T> => {
+  const response = await fetch(`${COINGECKO_BASE}${path}`, { headers: coingeckoHeaders() })
   if (!response.ok) {
     throw new Error(`http_${response.status}`)
   }
-
   return (await response.json()) as T
 }
 
 const fetchEthereumPriceUsd = async () => {
-  const body = await readJson<{ ethereum?: { usd?: number } }>(
-    'https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd'
+  const body = await cgGet<{ ethereum?: { usd?: number } }>(
+    '/simple/price?ids=ethereum&vs_currencies=usd'
   )
   const priceUsd = body.ethereum?.usd
   return typeof priceUsd === 'number' ? priceUsd : null
@@ -700,13 +719,34 @@ const COINGECKO_PLATFORM: Record<number, string> = {
   42161: 'arbitrum-one',
 }
 
-// Batch USD prices for ERC-20s by contract address on one platform.
+// USD prices for ERC-20s by contract address on one platform. With a CoinGecko
+// key we batch the whole list in one request; keyless we MUST send one address
+// per request (the public API caps token_price at a single address), throttled
+// to respect the low rate limit. Per-token failures are skipped, not fatal, so
+// one unlisted/erroring token never blocks the rest — they retry next cycle.
 const fetchTokenPricesUsd = async (platform: string, addresses: string[]) => {
-  if (!addresses.length) return {} as Record<string, { usd?: number }>
-  const url = `https://api.coingecko.com/api/v3/simple/token_price/${platform}?contract_addresses=${addresses.join(
-    ','
-  )}&vs_currencies=usd`
-  return readJson<Record<string, { usd?: number }>>(url)
+  const out: Record<string, { usd?: number }> = {}
+  if (!addresses.length) return out
+
+  if (COINGECKO_HAS_KEY) {
+    const result = await cgGet<Record<string, { usd?: number }>>(
+      `/simple/token_price/${platform}?contract_addresses=${addresses.join(',')}&vs_currencies=usd`
+    )
+    return result
+  }
+
+  for (let i = 0; i < addresses.length; i++) {
+    if (i > 0) await sleep(COINGECKO_THROTTLE_MS)
+    try {
+      const result = await cgGet<Record<string, { usd?: number }>>(
+        `/simple/token_price/${platform}?contract_addresses=${addresses[i]}&vs_currencies=usd`
+      )
+      Object.assign(out, result)
+    } catch (error) {
+      console.warn(`token price fetch failed for ${addresses[i]} on ${platform}`, error)
+    }
+  }
+  return out
 }
 
 // Prices each chain's custom gas token (ERC-20 on the parent) via CoinGecko,
