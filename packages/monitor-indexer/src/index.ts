@@ -79,7 +79,7 @@ for (const source of allSources) {
           eventName: 'AssertionCreated',
           assertionHash: event.args.assertionHash,
           blockHash: null,
-          confirmPeriodBlocks: event.args.assertion.configData.confirmPeriodBlocks,
+          confirmPeriodBlocks: event.args.assertion.beforeStateData.configData.confirmPeriodBlocks,
         })
         .onConflictDoNothing()
     })
