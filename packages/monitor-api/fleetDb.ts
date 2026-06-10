@@ -395,7 +395,10 @@ export class FleetDb {
       return await this.pool.query<T>(text, values)
     } catch (error) {
       const code = (error as { code?: string }).code
-      if (code === '42P01') {
+      // Tolerate schema drift so the API never 500s when the worker is behind:
+      // 42P01 = undefined table, 42703 = undefined column (e.g. a new column
+      // like chain_runtime.tps before the worker that adds it has redeployed).
+      if (code === '42P01' || code === '42703') {
         return { rows: [] as T[] }
       }
 
