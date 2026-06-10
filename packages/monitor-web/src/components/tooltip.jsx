@@ -30,6 +30,9 @@ export function Tip({ label, children, w = 240, underline = false, block = false
     open: show,
     placement: 'top',
     strategy: 'fixed',
+    // position via top/left (not transform) so the entrance animation can use
+    // transform: scale() without fighting Floating UI's positioning.
+    transform: false,
     whileElementsMounted: autoUpdate,
     middleware: [
       offset(9),
@@ -106,6 +109,7 @@ export function Tip({ label, children, w = 240, underline = false, block = false
               fontSize: 12,
               lineHeight: 1.5,
               color: 'var(--text-2)',
+              transformOrigin: above ? 'center bottom' : 'center top',
               animation: 'tipIn .12s ease',
             }}
           >
