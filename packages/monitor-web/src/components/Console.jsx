@@ -190,7 +190,7 @@ export function Console() {
   const next = () => ++line
 
   return (
-    <div style={{ background: '#080A0F', minHeight: '100%', display: 'flex', flexDirection: 'column', fontFamily: 'var(--mono)' }}>
+    <div style={{ background: '#080A0F', minHeight: '100%', display: 'flex', flexDirection: 'column', fontFamily: 'var(--mono)', overflowX: 'hidden' }}>
       {/* window chrome */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 16px', background: '#0E121B', borderBottom: '1px solid var(--hairline)' }}>
         <span style={{ display: 'flex', gap: 7 }}>
@@ -198,7 +198,7 @@ export function Console() {
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#FEBC2E' }} />
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#28C840' }} />
         </span>
-        <span style={{ flex: 1, textAlign: 'center', fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.02em' }}>
+        <span style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           fleetwatch — arbitrum dedicated chains fleet monitor — zsh — 142×48
         </span>
         <button
@@ -418,7 +418,7 @@ export function Console() {
       </div>
 
       {/* status bar (VS Code style) — fixed to the bottom of the viewport */}
-      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 30, display: 'flex', alignItems: 'center', gap: 0, background: 'var(--arb-blue)', color: '#fff', fontSize: 11.5, height: 26 }}>
+      <div style={{ position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 30, display: 'flex', alignItems: 'center', gap: 0, background: 'var(--arb-blue)', color: '#fff', fontSize: 11.5, height: 26, overflowX: 'auto', whiteSpace: 'nowrap' }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 11px', background: 'rgba(0,0,0,0.18)', height: '100%' }}>
           <span style={{ width: 7, height: 7, borderRadius: '50%', background: fleet.crit ? '#FFB4BC' : '#B8F5D6' }} />
           {status === 'error' ? 'disconnected' : fleet.crit ? 'partial outage' : fleet.warn ? 'degraded' : 'operational'}

@@ -253,16 +253,16 @@ export const Legend = React.memo(function Legend({ onClose }) {
 
   const mono = { fontFamily: 'var(--mono)', fontSize: 12.5, lineHeight: '21px' }
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)', zIndex: 60, display: 'flex', justifyContent: 'center', alignItems: 'flex-start', animation: 'fadeIn .18s ease', overflowY: 'auto', padding: '4vh 0' }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 'min(720px, 94vw)', background: '#080A0F', border: '1px solid var(--hairline-2)', borderRadius: 10, boxShadow: '0 30px 80px -20px rgba(0,0,0,0.8)', ...mono, color: COL.txt }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', background: '#0E121B', borderBottom: '1px solid var(--hairline)', borderRadius: '10px 10px 0 0' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)', zIndex: 60, display: 'flex', justifyContent: 'center', alignItems: 'center', animation: 'fadeIn .18s ease', padding: '4vh 12px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(720px, 94vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#080A0F', border: '1px solid var(--hairline-2)', borderRadius: 10, boxShadow: '0 30px 80px -20px rgba(0,0,0,0.8)', ...mono, color: COL.txt }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px', background: '#0E121B', borderBottom: '1px solid var(--hairline)', borderRadius: '10px 10px 0 0', flex: 'none' }}>
           <span style={{ color: COL.com }}>arb-monitor — </span>
           <span style={{ color: '#fff' }}>explain</span>
-          <span style={{ color: COL.com }}> — how insights are derived</span>
+          <span style={{ color: COL.com, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}> — how insights are derived</span>
           <span style={{ flex: 1 }} />
-          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline-2)', color: 'var(--text-3)', borderRadius: 6, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'var(--mono)' }}>esc ✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: '1px solid var(--hairline-2)', color: 'var(--text-3)', borderRadius: 6, padding: '3px 9px', fontSize: 11, cursor: 'pointer', fontFamily: 'var(--mono)', flex: 'none' }}>esc ✕</button>
         </div>
-        <div style={{ padding: '16px 18px 24px' }}>
+        <div style={{ padding: '16px 18px 24px', overflowY: 'auto', WebkitOverflowScrolling: 'touch', flex: 1 }}>
           <div style={{ color: COL.com, fontSize: 11.5, marginBottom: 14, lineHeight: 1.6 }}>
             Every chain is scored by three monitors — <Th st="ok">R</Th>etryable, <Th st="ok">B</Th>atch poster,{' '}
             <Th st="ok">A</Th>ssertion — using the same decision tree as the reference{' '}
