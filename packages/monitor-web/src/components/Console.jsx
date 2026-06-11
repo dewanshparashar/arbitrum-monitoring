@@ -212,16 +212,24 @@ export function Console() {
   const dataReady = !!data
   const showTable = bootDone && dataReady
 
-  // Sort: busiest first (TPS), then bridged TVL, then surface unhealthy chains,
-  // then name. Chains with no TPS sample (null) sink below measured-zero ones.
+  // Sort: economic weight first. Chains with a USD TVL rank at the top by $ desc;
+  // chains with no price feed form a tail below them, ranked among themselves by
+  // TPS desc (so an unpriced-but-busy chain can't leapfrog a genuinely larger
+  // $-chain — different units, so we partition rather than coalesce). Health and
+  // name are the final tie-breakers. Null TPS sinks below measured-zero.
+  const tvlKey = c => (typeof c.bridge.tvlUsd === 'number' ? c.bridge.tvlUsd : null)
   const tpsKey = c => (typeof c.tps === 'number' ? c.tps : -1)
-  const sorted = [...chains].sort(
-    (a, b) =>
+  const sorted = [...chains].sort((a, b) => {
+    const av = tvlKey(a)
+    const bv = tvlKey(b)
+    if (av != null && bv != null && av !== bv) return bv - av
+    if ((av != null) !== (bv != null)) return av != null ? -1 : 1
+    return (
       tpsKey(b) - tpsKey(a) ||
-      (b.bridge.tvlUsd || 0) - (a.bridge.tvlUsd || 0) ||
       order[a.health] - order[b.health] ||
       a.name.localeCompare(b.name)
-  )
+    )
+  })
 
   // fleet rollups derived from the per-chain overall health (matches glyphs)
   const fleet = {
