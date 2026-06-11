@@ -1,6 +1,7 @@
 import { Pool } from 'pg'
 import yargs from 'yargs'
 import { getMainnetChains, getParentRpcUrls, type PortalMainnetChain } from './portal'
+import { reconcileChainRedemptions, type ReconcileTicket } from './retryableRedemption'
 import {
   arbSysAddress,
   decodeL2ToL1Log,
@@ -74,6 +75,7 @@ class MetricsDb {
   private readonly batchDeliveriesTable: string
   private readonly retryableTicketsTable: string
   private readonly retryableAssetsTable: string
+  private readonly retryableRedemptionsTable: string
 
   constructor(connectionString: string, schemaName: string) {
     this.pool = new Pool({
@@ -92,6 +94,7 @@ class MetricsDb {
     // indexer-owned (read-only); we enrich each ticket with what it transfers
     this.retryableTicketsTable = tableName(this.schemaName, 'retryable_tickets')
     this.retryableAssetsTable = tableName(this.schemaName, 'retryable_assets')
+    this.retryableRedemptionsTable = tableName(this.schemaName, 'retryable_redemptions')
   }
 
   async init() {
@@ -198,6 +201,19 @@ class MetricsDb {
         checked_at timestamptz not null
       )
     `)
+    // Live redemption status of each indexed retryable, read from the child
+    // chain via the Arbitrum SDK. 'redeemed'/'expired'/'failed' are terminal;
+    // 'pending'/'unknown' get re-checked until they resolve.
+    await this.pool.query(`
+      create table if not exists ${this.retryableRedemptionsTable} (
+        id text primary key,
+        chain_id bigint not null,
+        status text not null,
+        child_ticket_id text,
+        redeemed_at timestamptz,
+        checked_at timestamptz not null
+      )
+    `)
   }
 
   // Indexed retryable tickets that haven't been enriched yet (newest first),
@@ -278,6 +294,61 @@ class MetricsDb {
         row.amountWei,
         row.checkedAt,
       ]
+    )
+  }
+
+  // Tickets whose redemption status needs a (re)check this cycle: never checked
+  // yet, or checked but not in a terminal state (still pending / not yet
+  // creatable on the child). Terminal rows ('redeemed'/'expired'/'failed') are
+  // skipped forever. Newest tickets first so fresh redemptions resolve quickly.
+  // Tolerates a missing indexer table (42P01) before the indexer has created it.
+  async getRetryablesToReconcile(limit: number) {
+    try {
+      const result = await this.pool.query<{
+        id: string
+        chain_id: string
+        parent_chain_id: string
+        transaction_hash: string
+        message_index: string
+      }>(
+        `
+          select rt.id, rt.chain_id, rt.parent_chain_id, rt.transaction_hash, rt.message_index
+          from ${this.retryableTicketsTable} rt
+          left join ${this.retryableRedemptionsTable} rr on rr.id = rt.id
+          where rr.id is null
+             or rr.status not in ('redeemed', 'expired', 'failed')
+          order by rt.parent_block_timestamp desc, rt.log_index desc
+          limit $1
+        `,
+        [limit]
+      )
+      return result.rows
+    } catch (error) {
+      if ((error as { code?: string }).code === '42P01') return []
+      throw error
+    }
+  }
+
+  async upsertRetryableRedemption(row: {
+    id: string
+    chainId: number
+    status: string
+    childTicketId: string | null
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.retryableRedemptionsTable}
+          (id, chain_id, status, child_ticket_id, redeemed_at, checked_at)
+        values ($1, $2, $3, $4, case when $3 = 'redeemed' then $5::timestamptz else null end, $5)
+        on conflict (id) do update
+        set status = excluded.status,
+            child_ticket_id = excluded.child_ticket_id,
+            -- preserve the first time we saw it redeemed
+            redeemed_at = coalesce(${this.retryableRedemptionsTable}.redeemed_at, excluded.redeemed_at),
+            checked_at = excluded.checked_at
+      `,
+      [row.id, row.chainId, row.status, row.childTicketId, row.checkedAt]
     )
   }
 
@@ -560,6 +631,15 @@ class MetricsDb {
     } catch (error) {
       if ((error as { code?: string }).code !== '42P01') throw error
     }
+    // likewise drop redemption rows for tickets aged out of the indexer window
+    try {
+      await this.pool.query(
+        `delete from ${this.retryableRedemptionsTable} rr
+         where not exists (select 1 from ${this.retryableTicketsTable} rt where rt.id = rr.id)`
+      )
+    } catch (error) {
+      if ((error as { code?: string }).code !== '42P01') throw error
+    }
   }
 
   async close() {
@@ -766,6 +846,13 @@ const syncTokenPrices = async (db: MetricsDb) => {
 // token reads). Unenriched tickets are picked up on later cycles.
 const RETRYABLE_ENRICH_LIMIT = Number(process.env.MONITOR_METRICS_RETRYABLE_LIMIT || 60)
 
+// Max tickets to reconcile redemption status for per cycle. Each one costs a
+// parent receipt fetch (shared per tx) plus child-chain calls for status, so
+// this bounds RPC fan-out across all chains. Non-terminal tickets carry over.
+const RETRYABLE_REDEMPTION_LIMIT = Number(
+  process.env.MONITOR_METRICS_RETRYABLE_REDEMPTION_LIMIT || 80
+)
+
 // For each newly-indexed retryable, fetch its L1 creating tx receipt and derive
 // what it transfers (ERC-20 deposit / ETH deposit / value-less message). ERC-20
 // tokens are then priced via DefiLlama under the token's address as asset_key,
@@ -871,6 +958,69 @@ const syncRetryableAssets = async (db: MetricsDb) => {
       console.error('retryable token price fetch failed', error)
     }
   }
+}
+
+// Reconciles each indexed retryable against its real child-chain redemption
+// status (REDEEMED / EXPIRED / still pending). The indexer only records
+// creation, so without this every created ticket would count as "open" until
+// its synthesized 7-day timeout — even the ones auto-redeemed on creation.
+const syncRetryableRedemptions = async (db: MetricsDb) => {
+  const rows = await db.getRetryablesToReconcile(RETRYABLE_REDEMPTION_LIMIT)
+  if (!rows.length) return
+
+  const parentRpcUrls = getParentRpcUrls()
+  const chainsById = new Map(getMainnetChains().map(chain => [chain.chainId, chain]))
+
+  // group the cycle's tickets by chain, so each chain registers + builds
+  // providers once
+  const byChain = new Map<number, ReconcileTicket[]>()
+  for (const row of rows) {
+    const chainId = Number(row.chain_id)
+    const ticket: ReconcileTicket = {
+      id: row.id,
+      transactionHash: row.transaction_hash,
+      messageIndex: row.message_index,
+    }
+    const list = byChain.get(chainId)
+    if (list) list.push(ticket)
+    else byChain.set(chainId, [ticket])
+  }
+
+  await Promise.all(
+    Array.from(byChain.entries()).map(async ([chainId, tickets]) => {
+      const chain = chainsById.get(chainId)
+      if (!chain) return
+      const parentRpcUrl = parentRpcUrls[chain.parentChainId]
+      if (!parentRpcUrl) return
+
+      try {
+        const results = await reconcileChainRedemptions(
+          {
+            chainId: chain.chainId,
+            parentChainId: chain.parentChainId,
+            name: chain.name,
+            rpcUrl: chain.rpcUrl,
+            ethBridge: chain.ethBridge,
+          },
+          parentRpcUrl,
+          tickets
+        )
+        // stamp each row at write time (resume-safe: no Date.now in shared libs)
+        const checkedAt = new Date().toISOString()
+        for (const result of results) {
+          await db.upsertRetryableRedemption({
+            id: result.id,
+            chainId: chain.chainId,
+            status: result.status,
+            childTicketId: result.childTicketId,
+            checkedAt,
+          })
+        }
+      } catch (error) {
+        console.error(`redemption reconcile failed for ${chain.slug}`, error)
+      }
+    })
+  )
 }
 
 const syncChildExitLogs = async ({
@@ -1244,6 +1394,7 @@ const runCycle = async (db: MetricsDb, chunkSize: number) => {
   await stage('parent heads', () => syncParentHeads(db))
   await stage('exit sync', () => syncExitMessages(db, chunkSize))
   await stage('retryable assets', () => syncRetryableAssets(db))
+  await stage('retryable redemptions', () => syncRetryableRedemptions(db))
   await stage('prune', () => db.prune())
 
   return { failed }

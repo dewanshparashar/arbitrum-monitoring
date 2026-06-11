@@ -440,6 +440,7 @@ export class FleetDb {
   private readonly workerStateTable: string
   private readonly chainRuntimeTable: string
   private readonly retryableAssetsTable: string
+  private readonly retryableRedemptionsTable: string
 
   constructor(connectionString: string, schemaName = process.env.DATABASE_SCHEMA) {
     const schema = normalizeSchemaName(schemaName)
@@ -457,6 +458,7 @@ export class FleetDb {
     this.workerStateTable = tableName(schema, 'metric_worker_state')
     this.chainRuntimeTable = tableName(schema, 'chain_runtime')
     this.retryableAssetsTable = tableName(schema, 'retryable_assets')
+    this.retryableRedemptionsTable = tableName(schema, 'retryable_redemptions')
   }
 
   async healthCheck() {
@@ -486,6 +488,48 @@ export class FleetDb {
     }
   }
 
+  // Per-chain retryable counts, excluding tickets the worker has confirmed
+  // REDEEMED on the child chain (status is distinct from 'redeemed' keeps
+  // unchecked tickets counted, so the numbers only ever shrink as redemptions
+  // are confirmed — never hide a ticket we haven't verified). Falls back to the
+  // plain counts if the redemptions table isn't there yet (worker not deployed).
+  private async readRetryableSummary(
+    nowSeconds: number
+  ): Promise<{ rows: RetryableSummaryRow[] }> {
+    const redeemed = `rr.status is distinct from 'redeemed'`
+    try {
+      return await this.pool.query<RetryableSummaryRow>(
+        `
+          select
+            rt.chain_id,
+            count(*) filter (where ${redeemed}) as total_count,
+            count(*) filter (where ${redeemed} and rt.expires_at > $1 and rt.expires_at - $1 <= 72 * 60 * 60) as expiring_count,
+            count(*) filter (where ${redeemed} and rt.expires_at <= $1) as expired_count
+          from ${this.retryableTicketsTable} rt
+          left join ${this.retryableRedemptionsTable} rr on rr.id = rt.id
+          group by rt.chain_id
+        `,
+        [nowSeconds]
+      )
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      if (code !== '42P01' && code !== '42703') throw error
+      // redemptions table not present yet — count every ticket as before
+      return this.pool.query<RetryableSummaryRow>(
+        `
+          select
+            chain_id,
+            count(*) as total_count,
+            count(*) filter (where expires_at > $1 and expires_at - $1 <= 72 * 60 * 60) as expiring_count,
+            count(*) filter (where expires_at <= $1) as expired_count
+          from ${this.retryableTicketsTable}
+          group by chain_id
+        `,
+        [nowSeconds]
+      )
+    }
+  }
+
   // Recent retryable tickets joined with the worker's per-ticket asset
   // enrichment (token + amount) and the latest USD price for that asset. Falls
   // back to the plain ticket list if the enrichment table/columns aren't there
@@ -507,6 +551,9 @@ export class FleetDb {
       isExpired
         ? `order by ${pfx}expires_at desc`
         : `order by ${pfx}parent_block_timestamp desc, ${pfx}log_index desc`
+    // the expired list is the "funds at risk" set, so drop tickets the worker
+    // has confirmed redeemed; the recent list keeps them and surfaces the status
+    const redeemedExclusion = isExpired ? `and rr.status is distinct from 'redeemed'` : ''
     const enriched = `
       select
         rt.*,
@@ -515,9 +562,11 @@ export class FleetDb {
         ra.token_symbol as asset_symbol,
         ra.token_decimals as asset_decimals,
         ra.amount_wei::text as asset_amount_wei,
-        p.price_usd as asset_price_usd
+        p.price_usd as asset_price_usd,
+        rr.status as redemption_status
       from ${this.retryableTicketsTable} rt
       left join ${this.retryableAssetsTable} ra on ra.id = rt.id
+      left join ${this.retryableRedemptionsTable} rr on rr.id = rt.id
       left join lateral (
         select price_usd
         from ${this.pricesTable} ap
@@ -525,7 +574,7 @@ export class FleetDb {
         order by checked_at desc
         limit 1
       ) p on true
-      where rt.chain_id = $1 ${where('rt.')}
+      where rt.chain_id = $1 ${where('rt.')} ${redeemedExclusion}
       ${order('rt.')}
       limit 25
     `
@@ -619,18 +668,7 @@ export class FleetDb {
           left join latest on latest.chain_id = events.chain_id
           group by events.chain_id, latest.event_name
         `),
-        this.pool.query<RetryableSummaryRow>(
-          `
-            select
-              chain_id,
-              count(*) as total_count,
-              count(*) filter (where expires_at > $1 and expires_at - $1 <= 72 * 60 * 60) as expiring_count,
-              count(*) filter (where expires_at <= $1) as expired_count
-            from ${this.retryableTicketsTable}
-            group by chain_id
-          `,
-          [nowSeconds]
-        ),
+        this.readRetryableSummary(nowSeconds),
         // Highest USD value among each chain's expiring-or-expired retryables
         // (expires_at within the next 72h or already past). Joins the worker's
         // per-ticket asset enrichment to the latest price; only priced tickets
@@ -644,6 +682,7 @@ export class FleetDb {
               ) as at_risk_max_usd
             from ${this.retryableTicketsTable} rt
             join ${this.retryableAssetsTable} ra on ra.id = rt.id
+            left join ${this.retryableRedemptionsTable} rr on rr.id = rt.id
             join lateral (
               select price_usd
               from ${this.pricesTable} ap
@@ -653,6 +692,7 @@ export class FleetDb {
             ) p on true
             where rt.expires_at <= $1 + 72 * 60 * 60
               and ra.amount_wei is not null
+              and rr.status is distinct from 'redeemed'
             group by rt.chain_id
           `,
           [nowSeconds]

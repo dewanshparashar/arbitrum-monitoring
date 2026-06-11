@@ -385,10 +385,23 @@ export const fetchChainDetail = async chainId => {
   const mapTicket = r => {
     const exp = Number(r.expires_at)
     const remaining = exp - nowSec
-    const state =
-      remaining <= 0 ? 'Expired' : remaining <= 2 * 86400 ? 'Expiring' : 'Pending'
-    const stKind =
-      state === 'Expired' ? 'crit' : state === 'Expiring' ? 'warn' : 'open'
+    // worker-confirmed child-chain redemption status, when available. 'redeemed'
+    // and 'expired' are authoritative; otherwise fall back to the time-based view.
+    const redemption = r.redemption_status || null
+    let state
+    let stKind
+    if (redemption === 'redeemed') {
+      state = 'Redeemed'
+      stKind = 'ok'
+    } else if (redemption === 'expired') {
+      state = 'Expired'
+      stKind = 'crit'
+    } else {
+      state =
+        remaining <= 0 ? 'Expired' : remaining <= 2 * 86400 ? 'Expiring' : 'Pending'
+      stKind =
+        state === 'Expired' ? 'crit' : state === 'Expiring' ? 'warn' : 'open'
+    }
     // worker-derived: what the ticket is moving (erc20 / eth / message)
     let asset = null
     if (r.asset_kind) {
@@ -411,6 +424,8 @@ export const fetchChainDetail = async chainId => {
       state,
       stKind,
       asset,
+      redemption, // 'redeemed' | 'expired' | 'pending' | 'unknown' | null
+      redeemed: redemption === 'redeemed',
     }
   }
   const tickets = (detail.recentRetryables || []).map(mapTicket)
