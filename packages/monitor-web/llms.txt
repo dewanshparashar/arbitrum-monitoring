@@ -1,6 +1,6 @@
 # FleetWatch
 
-> Live operational health for Arbitrum dedicated chains (L2/L3): RPC uptime, bridge TVL, batch-poster cadence, assertion health, retryable tickets, gas token, and ArbOS version. All data is available as read-only JSON over a public, CORS-enabled API — agents can query it directly with no authentication.
+> Live operational health for Arbitrum dedicated chains (L2/L3): RPC uptime, bridge TVL, batch-poster cadence, assertion health, retryable tickets, gas token, and ArbOS version. All data is available as read-only JSON over a public, CORS-enabled API, so agents can query it directly with no authentication.
 
 FleetWatch continuously indexes Arbitrum dedicated chains and exposes a stateless JSON API at `https://fleetwatch.xyz`. Requests are `GET` only, require no auth, and return `Access-Control-Allow-Origin: *`. Data refreshes roughly every 30s, so polling faster than that is wasteful.
 
