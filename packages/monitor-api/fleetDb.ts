@@ -551,9 +551,9 @@ export class FleetDb {
       isExpired
         ? `order by ${pfx}expires_at desc`
         : `order by ${pfx}parent_block_timestamp desc, ${pfx}log_index desc`
-    // the expired list is the "funds at risk" set, so drop tickets the worker
-    // has confirmed redeemed; the recent list keeps them and surfaces the status
-    const redeemedExclusion = isExpired ? `and rr.status is distinct from 'redeemed'` : ''
+    // redeemed tickets are no longer interesting — they're confirmed safe and
+    // get pruned from the DB — so drop them from both lists.
+    const redeemedExclusion = `and rr.status is distinct from 'redeemed'`
     const enriched = `
       select
         rt.*,

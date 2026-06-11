@@ -29,6 +29,15 @@ import {
 const eightDaysSeconds = 8 * 24 * 60 * 60
 const zeroAddress = '0x0000000000000000000000000000000000000000'
 
+// How old a confirmed-redeemed ticket must be before we delete it from the
+// indexer's table. retryable_tickets is Ponder-owned; deleting a row still
+// inside Ponder's reorg window would desync its undo log, so we only prune
+// rows well past any parent-chain finality. Until then the API just excludes
+// redeemed tickets from every count/list, so they're already invisible.
+const REDEEMED_PRUNE_AGE_SECONDS = Number(
+  process.env.MONITOR_METRICS_REDEEMED_PRUNE_AGE_SECONDS || 6 * 60 * 60
+)
+
 const readConfig = () =>
   yargs(process.argv.slice(2))
     .options({
@@ -622,6 +631,22 @@ class MetricsDb {
     await this.pool.query(
       `delete from ${this.exitsTable} where started_at < now() - interval '8 days'`
     )
+    // Prune retryables we've confirmed redeemed on the child chain, once they're
+    // old enough to be safely past the indexer's reorg window (so we never
+    // delete a row Ponder might still roll back). Their enrichment + redemption
+    // rows are then swept by the orphan deletes below.
+    try {
+      await this.pool.query(
+        `delete from ${this.retryableTicketsTable} rt
+         using ${this.retryableRedemptionsTable} rr
+         where rr.id = rt.id
+           and rr.status = 'redeemed'
+           and rt.parent_block_timestamp < extract(epoch from now()) - $1`,
+        [REDEEMED_PRUNE_AGE_SECONDS]
+      )
+    } catch (error) {
+      if ((error as { code?: string }).code !== '42P01') throw error
+    }
     // drop enrichment for tickets the indexer has aged out of its window
     try {
       await this.pool.query(

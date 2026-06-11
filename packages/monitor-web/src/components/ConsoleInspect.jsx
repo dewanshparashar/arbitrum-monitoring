@@ -476,7 +476,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                       </span>
                       <span style={{ color: stColor[t.stKind] || C.num, width: 78 }}>{t.state}</span>
                       <span style={{ flex: 1, color: C.txt }}>
-                        {t.asset && t.asset.usd != null && t.asset.usd >= HIGH_VALUE_USD && !t.redeemed ? (
+                        {t.asset && t.asset.usd != null && t.asset.usd >= HIGH_VALUE_USD ? (
                           <Tip w={230} label={`High-value retryable — ${F.money(t.asset.usd)} bridged. If it expires unredeemed, these funds must be recovered manually.`}>
                             <span style={{ marginRight: 5 }}>💰</span>
                           </Tip>
@@ -495,12 +495,8 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                         )}
                       </span>
                       <span style={{ color: C.com }}>created {F.ago(t.createdAt)}</span>
-                      <span style={{ color: t.redeemed ? C.str : t.stKind === 'crit' ? C.crit : C.com }}>
-                        {t.redeemed
-                          ? 'redeemed'
-                          : t.expiresAt <= Math.floor(Date.now() / 1000)
-                          ? 'expired'
-                          : 'timeout ' + F.until(t.expiresAt)}
+                      <span style={{ color: t.stKind === 'crit' ? C.crit : C.com }}>
+                        {t.expiresAt <= Math.floor(Date.now() / 1000) ? 'expired' : 'timeout ' + F.until(t.expiresAt)}
                       </span>
                     </div>
                   ))
