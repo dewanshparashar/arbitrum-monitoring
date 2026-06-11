@@ -112,7 +112,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
   const mono = { fontFamily: 'var(--mono)', fontSize: 12.5, lineHeight: '21px', fontVariantNumeric: 'tabular-nums' }
 
   const Panel = ({ title, accent = C.com, right, children, span = 1 }) => (
-    <div style={{ gridColumn: `span ${span}`, border: '1px solid var(--hairline)', borderRadius: 8, background: 'rgba(255,255,255,0.015)', position: 'relative' }}>
+    <div className="fw-insp-panel" style={{ gridColumn: `span ${span}`, border: '1px solid var(--hairline)', borderRadius: 8, background: 'rgba(255,255,255,0.015)', position: 'relative' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 13px', borderBottom: '1px solid var(--hairline)' }}>
         <span style={{ color: accent, fontSize: 11.5, letterSpacing: '0.02em' }}>
           <span style={{ color: C.com }}># </span>
@@ -155,6 +155,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
       style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(2px)', zIndex: 50, display: 'flex', justifyContent: 'flex-end', animation: 'fadeIn .18s ease' }}
     >
       <div
+        className="fw-insp-drawer"
         onClick={e => e.stopPropagation()}
         style={{
           width: 'min(760px, 94vw)',
@@ -234,7 +235,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
           )}
 
           {/* grid of panels */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="fw-insp-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             {/* Bridge flow — signature */}
             <Panel
               title="bridge.flow"
@@ -248,7 +249,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 ) : null
               }
             >
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
+              <div className="fw-metric-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14 }}>
                 <Metric
                   label={
                     <Tip underline w={300} label={<TvlDerivation b={c.bridge} />}>
@@ -324,7 +325,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 ) : null
               }
             >
-              <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
+              <div className="fw-metric-row" style={{ display: 'flex', gap: 16, alignItems: 'flex-end' }}>
                 <div style={{ flex: 1 }}>
                   <Tip block w={270} label="Each bar is a time bucket of RPC probes — hover for its span, uptime %, and p50 latency. Green = all healthy, amber = slow (p50 >350ms), red = a failure in that bucket. The strip spans the full probe history in the database (up to 8 days), bucketed to fit.">
                     <UptimeBars bars={detail?.rpcBars || []} h={34} />
@@ -453,7 +454,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 </Tip>
               }
             >
-              <div style={{ display: 'flex', gap: 18, marginBottom: 12 }}>
+              <div className="fw-metric-row" style={{ display: 'flex', gap: 18, marginBottom: 12 }}>
                 <Metric label={<Tip underline label="Retryable tickets created but not confirmed redeemed in the window.">Open</Tip>} value={c.retry.open} color={C.txt} />
                 <Metric label={<Tip underline w={240} label="Open tickets within 2 days of their 7-day timeout.">Expiring &lt;2d</Tip>} value={c.retry.expiringSoon} color={c.retry.expiringSoon ? C.warn : C.str} />
                 <Metric label={<Tip underline label="Tickets that passed their timeout unredeemed.">Expired</Tip>} value={c.retry.expired} color={c.retry.expired ? C.crit : C.str} />
@@ -535,7 +536,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
 
             {/* contracts */}
             <Panel title="contracts" accent={C.com} span={2} right={<span style={{ fontSize: 11, color: C.com }}>on {F.expl.name(c.parentChainId)} ↗</span>}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 24px' }}>
+              <div className="fw-contracts-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 24px' }}>
                 <KV k="rollup" v={<Ext chainId={c.parentChainId} hash={contracts.rollup} kind="addr" tip="Rollup contract">{contracts.rollup ? contracts.rollup.slice(0, 8) + '…' + contracts.rollup.slice(-4) : null}</Ext>} />
                 <KV k="sequencerInbox" v={<Ext chainId={c.parentChainId} hash={contracts.sequencerInbox} kind="addr" tip="SequencerInbox contract">{contracts.sequencerInbox ? contracts.sequencerInbox.slice(0, 8) + '…' + contracts.sequencerInbox.slice(-4) : null}</Ext>} />
                 <KV k="bridge" v={<Ext chainId={c.parentChainId} hash={contracts.bridge} kind="addr" tip="Bridge contract">{contracts.bridge ? contracts.bridge.slice(0, 8) + '…' + contracts.bridge.slice(-4) : null}</Ext>} />

@@ -273,7 +273,7 @@ export function Console() {
           <span style={{ width: 12, height: 12, borderRadius: '50%', background: '#28C840' }} />
         </span>
         <span style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 12, color: 'var(--text-3)', letterSpacing: '0.02em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          fleetwatch — arbitrum dedicated chains fleet monitor — zsh — 142×48
+          fleetwatch — arbitrum dedicated chains fleet monitor — zsh<span className="fw-chrome-dims"> — 142×48</span>
         </span>
         <button
           onClick={() => setShowLegend(true)}
@@ -282,7 +282,13 @@ export function Console() {
         >
           ? explain
         </button>
-        <span style={{ fontSize: 11.5, color: 'var(--text-4)' }}>fsn1 ● live</span>
+        <span className="fw-chrome-host" style={{ fontSize: 11.5, color: 'var(--text-4)' }}>fsn1 ● live</span>
+      </div>
+
+      {/* touch cue — hidden on desktop, shown below the title bar on mobile,
+          where the table scrolls horizontally rather than reflowing */}
+      <div className="fw-swipe-hint" style={{ alignItems: 'center', gap: 7, padding: '7px 16px', background: '#0B0F18', borderBottom: '1px solid var(--hairline)', fontSize: 11, color: C.com }}>
+        <span style={{ color: C.flag }}>↔</span> swipe to see all columns · tap a row to inspect
       </div>
 
       {/* terminal body */}

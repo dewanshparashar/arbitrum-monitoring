@@ -96,3 +96,39 @@ body {
 *::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
 *::-webkit-scrollbar-thumb:hover { background: #2a3450; background-clip: padding-box; }
 *::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+   Responsive — one breakpoint. A terminal is meant to be wide,
+   so the fleet table keeps its monospace grid and scrolls
+   horizontally instead of reflowing into cards. Below 760px we
+   trim the cosmetic window chrome, surface a one-line swipe cue,
+   take the inspector full-screen, and fold its panel grid to a
+   single column (metric grids 4 → 2). The components carry these
+   classes but style themselves inline, so desktop (≥ 761px) is
+   entirely unaffected — these rules simply don't apply there.
+   ============================================================ */
+
+/* swipe cue is mobile-only; hidden until the breakpoint fires */
+.fw-swipe-hint { display: none; }
+
+@media (max-width: 760px) {
+  /* window chrome drops its dimensions + host badge so the title breathes */
+  .fw-chrome-dims, .fw-chrome-host { display: none !important; }
+
+  /* the touch cue under the title bar */
+  .fw-swipe-hint { display: flex !important; }
+
+  /* inspector fills the viewport */
+  .fw-insp-drawer { width: 100vw !important; border-left: none !important; }
+
+  /* panels stack single-column; span-2 panels no longer force a phantom 2nd column */
+  .fw-insp-grid { grid-template-columns: 1fr !important; }
+  .fw-insp-panel { grid-column: auto !important; }
+
+  /* metric grids fold 4 → 2; flex metric rows wrap rather than overflow */
+  .fw-metric-grid { grid-template-columns: 1fr 1fr !important; }
+  .fw-metric-row { flex-wrap: wrap !important; row-gap: 14px !important; }
+
+  /* contracts fold to a single column for legibility at narrow widths */
+  .fw-contracts-grid { grid-template-columns: 1fr !important; }
+}
