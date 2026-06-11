@@ -61,6 +61,14 @@ type RetryableSummaryRow = {
   expired_count: string
 }
 
+// Highest USD value among a chain's expiring-or-expired retryables (the value
+// "at risk" of manual recovery). Optional — degrades to [] when the worker's
+// asset/price enrichment tables aren't present yet.
+type RetryableValueRow = {
+  chain_id: number
+  at_risk_max_usd: string | null
+}
+
 type RpcSummaryRow = {
   chain_id: number
   total_count: string
@@ -128,6 +136,7 @@ type FleetChain = {
   openRetryCount: number
   openRetryUrgentCount: number
   expiredRetryableCount: number
+  retryableAtRiskUsd: number | null
   rpcScore: number | null
   rpcChecks8d: number
   rpcHistory: Array<{ pct: number | null; p50: number | null } | null> | null
@@ -579,7 +588,7 @@ export class FleetDb {
 
   async readFleetChains(): Promise<FleetChain[]> {
     const nowSeconds = Math.floor(Date.now() / 1000)
-    const [batchRows, assertionRows, retryableRows, rpcRows, balanceRows, priceRows, exitRows, runtimeRows, rpcHistRows] =
+    const [batchRows, assertionRows, retryableRows, retryableValueRows, rpcRows, balanceRows, priceRows, exitRows, runtimeRows, rpcHistRows] =
       await Promise.all([
         this.pool.query<BatchSummaryRow>(`
           select distinct on (chain_id)
@@ -619,6 +628,32 @@ export class FleetDb {
               count(*) filter (where expires_at <= $1) as expired_count
             from ${this.retryableTicketsTable}
             group by chain_id
+          `,
+          [nowSeconds]
+        ),
+        // Highest USD value among each chain's expiring-or-expired retryables
+        // (expires_at within the next 72h or already past). Joins the worker's
+        // per-ticket asset enrichment to the latest price; only priced tickets
+        // contribute. Optional so a missing enrichment table can't break the list.
+        this.queryOptional<RetryableValueRow>(
+          `
+            select
+              rt.chain_id,
+              max(
+                (ra.amount_wei::numeric / power(10, coalesce(ra.token_decimals, 18))) * p.price_usd
+              ) as at_risk_max_usd
+            from ${this.retryableTicketsTable} rt
+            join ${this.retryableAssetsTable} ra on ra.id = rt.id
+            join lateral (
+              select price_usd
+              from ${this.pricesTable} ap
+              where ap.asset_key = case when ra.kind = 'eth' then 'ethereum' else ra.token_address end
+              order by checked_at desc
+              limit 1
+            ) p on true
+            where rt.expires_at <= $1 + 72 * 60 * 60
+              and ra.amount_wei is not null
+            group by rt.chain_id
           `,
           [nowSeconds]
         ),
@@ -727,6 +762,7 @@ export class FleetDb {
     const batchByChainId = byChainId(batchRows.rows)
     const assertionByChainId = byChainId(assertionRows.rows)
     const retryableByChainId = byChainId(retryableRows.rows)
+    const retryableValueByChainId = byChainId(retryableValueRows.rows)
     const rpcByChainId = byChainId(rpcRows.rows)
     // group the bucketed history into a fixed-length array per chain
     const rpcHistByChainId = new Map<number, Array<{ pct: number | null; p50: number | null } | null>>()
@@ -754,6 +790,7 @@ export class FleetDb {
         const batch = batchByChainId.get(chain.chainId)
         const assertion = assertionByChainId.get(chain.chainId)
         const retryable = retryableByChainId.get(chain.chainId)
+        const retryableValue = retryableValueByChainId.get(chain.chainId)
         const rpc = rpcByChainId.get(chain.chainId)
         const balance = balanceByChainId.get(chain.chainId)
         const exit = exitByChainId.get(chain.chainId)
@@ -816,6 +853,10 @@ export class FleetDb {
           openRetryUrgentCount:
             parseCount(retryable?.expiring_count) + parseCount(retryable?.expired_count),
           expiredRetryableCount: parseCount(retryable?.expired_count),
+          retryableAtRiskUsd:
+            retryableValue?.at_risk_max_usd != null
+              ? Number(retryableValue.at_risk_max_usd)
+              : null,
           rpcScore: rpcChecks8d ? (okRpcChecks8d / rpcChecks8d) * 100 : null,
           rpcChecks8d,
           rpcHistory: rpcHistByChainId.get(chain.chainId) ?? null,

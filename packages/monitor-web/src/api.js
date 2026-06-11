@@ -14,6 +14,10 @@
 
 import { registerExplorer, minsSince, assetLabel } from './fmt.js'
 
+// USD value at/above which an expiring or expired retryable is flagged with a
+// 💰 indicator — funds large enough that manual recovery is worth chasing.
+export const HIGH_VALUE_USD = 500
+
 // ---- API base resolution (no visible form; same-origin on Vercel) ----
 const loadConfigApiBase = () => window.MONITOR_WEB_CONFIG?.apiBase || ''
 
@@ -197,6 +201,9 @@ export const toViewChain = c => {
       urgent,
       expired,
       expiringSoon: Math.max(urgent - expired, 0),
+      // highest USD value among this chain's expiring/expired retryables, or
+      // null when none are priced (drives the 💰 at-risk indicator)
+      atRiskUsd: c.retryableAtRiskUsd ?? null,
     },
     _api: c,
   }

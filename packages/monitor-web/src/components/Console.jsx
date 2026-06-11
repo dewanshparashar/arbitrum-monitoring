@@ -7,7 +7,7 @@ import React from 'react'
 import useSWR from 'swr'
 import * as F from '../fmt.js'
 import { full, relative, absolute } from '../time.js'
-import { fetchFleet } from '../api.js'
+import { fetchFleet, HIGH_VALUE_USD } from '../api.js'
 import { Tip } from './tooltip.jsx'
 import { BlinkCursor } from './viz.jsx'
 import { ConsoleInspect } from './ConsoleInspect.jsx'
@@ -403,7 +403,7 @@ export function Console() {
             <span style={col(160, 'right')}><Tip underline w={280} label={HEADERS.tvl}>bridged tvl</Tip></span>
             <span style={col(140, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending out</Tip></span>
             <span style={col(74, 'right')}><Tip underline w={250} label={HEADERS.batch}>batch</Tip></span>
-            <span style={col(66, 'right')}><Tip underline w={260} label={HEADERS.retry}>retry</Tip></span>
+            <span style={col(86, 'right')}><Tip underline w={260} label={HEADERS.retry}>retry</Tip></span>
             <span style={col(46, 'right')}><Tip underline w={250} label={HEADERS.alert}>alert</Tip></span>
           </div>
 
@@ -487,7 +487,15 @@ export function Console() {
                 <span style={{ ...col(74, 'right'), color: c.batch.lastMins != null && c.batch.lastMins > c.batch.targetMins * 2 ? C.crit : C.com }}>
                   {F.dur(c.batch.lastMins)}
                 </span>
-                <span style={{ ...col(66, 'right'), color: c.retry.urgent > 0 ? C.warn : C.com }}>
+                <span style={{ ...col(86, 'right'), color: c.retry.urgent > 0 ? C.warn : C.com }}>
+                  {c.retry.atRiskUsd != null && c.retry.atRiskUsd >= HIGH_VALUE_USD ? (
+                    <Tip
+                      w={250}
+                      label={`At least ${F.money(c.retry.atRiskUsd)} of expiring or expired retryable value at risk on this chain — unredeemed funds that need manual recovery before timeout. Click the row to see the tickets.`}
+                    >
+                      <span style={{ marginRight: 4 }}>💰</span>
+                    </Tip>
+                  ) : null}
                   {c.retry.open}
                   {c.retry.urgent > 0 ? <span style={{ color: C.warn }}>·{c.retry.urgent}!</span> : ''}
                 </span>

@@ -22,7 +22,7 @@ FleetWatch continuously indexes Arbitrum dedicated chains and exposes a stateles
 - `pendingOutUsd` | `pendingOutNative` + count
 - `lastBatchAt` (unix seconds), `lastBatchSequenceNumber`
 - `latestAssertionCreatedAt`, `latestAssertionConfirmedAt`, `createdAssertions8d`, `confirmedAssertions8d`
-- `openRetryCount`, `expiredRetryableCount`
+- `openRetryCount`, `expiredRetryableCount`, `retryableAtRiskUsd` (highest USD value among the chain's expiring-or-expired retryables, or null when none are priced)
 - `arbosVersion` (number, e.g. 32), `arbosName` (e.g. "Bianca"), `batchPoster` (EOA address)
 
 ## Notes for agents

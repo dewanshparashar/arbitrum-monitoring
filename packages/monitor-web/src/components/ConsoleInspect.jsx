@@ -9,7 +9,7 @@ import React from 'react'
 import useSWR from 'swr'
 import * as F from '../fmt.js'
 import { full, relative, absolute } from '../time.js'
-import { fetchChainDetail, synthesizeAlerts, registerExplorersFromDetail } from '../api.js'
+import { fetchChainDetail, synthesizeAlerts, registerExplorersFromDetail, HIGH_VALUE_USD } from '../api.js'
 import { whyBatch, whyAssertion, whyRetryable, whyRpc } from '../explainers.jsx'
 import { ChainLogo, UptimeBars, BlinkCursor } from './viz.jsx'
 import { Tip, Ext } from './tooltip.jsx'
@@ -476,6 +476,11 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                       </span>
                       <span style={{ color: stColor[t.stKind] || C.num, width: 78 }}>{t.state}</span>
                       <span style={{ flex: 1, color: C.txt }}>
+                        {t.asset && t.asset.usd != null && t.asset.usd >= HIGH_VALUE_USD ? (
+                          <Tip w={230} label={`High-value retryable — ${F.money(t.asset.usd)} bridged. If it expires unredeemed, these funds must be recovered manually.`}>
+                            <span style={{ marginRight: 5 }}>💰</span>
+                          </Tip>
+                        ) : null}
                         {t.asset && t.asset.amount != null ? (
                           <Tip w={260} label={`Token bridged by this retryable, decoded from its L1 creating transaction (${t.asset.kind === 'erc20' ? 'gateway deposit' : t.asset.kind === 'native' ? 'native gas-token deposit' : 'native ETH deposit'}). USD ${t.asset.usd != null ? 'from a live DefiLlama price feed.' : 'unavailable — no price feed for this token.'}`}>
                             <span style={{ borderBottom: '1px dotted rgba(255,255,255,0.18)' }}>
@@ -535,6 +540,11 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                                   </Ext>
                                 </span>
                                 <span style={{ flex: 1, color: C.txt }}>
+                                  {t.asset && t.asset.usd != null && t.asset.usd >= HIGH_VALUE_USD ? (
+                                    <Tip w={230} label={`High-value expired retryable — ${F.money(t.asset.usd)} stuck. These funds must be recovered manually.`}>
+                                      <span style={{ marginRight: 5 }}>💰</span>
+                                    </Tip>
+                                  ) : null}
                                   {t.asset && t.asset.amount != null ? (
                                     <span>
                                       {F.compact(t.asset.amount, t.asset.symbol || '')}
