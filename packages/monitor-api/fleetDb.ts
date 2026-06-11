@@ -168,7 +168,10 @@ type FleetChain = {
   alerts: number
 }
 
-const PRICE_SOURCE = 'coingecko'
+// Gas-token / bridge-TVL prices come from DefiLlama's coins API (see
+// monitor-metrics). The `coingecko:<id>` strings used as price keys are
+// DefiLlama's own coin identifiers, not a CoinGecko API call.
+const PRICE_SOURCE = 'defillama'
 // number of bars the inspector's RPC uptime strip is bucketed into
 const RPC_HISTORY_BUCKETS = 40
 // number of bars in the compact table sparkline (preview of the inspector strip)
