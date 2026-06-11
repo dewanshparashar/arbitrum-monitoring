@@ -375,7 +375,7 @@ export const fetchChainDetail = async chainId => {
 
   // retryable tickets from indexed rows
   const nowSec = Math.floor(Date.now() / 1000)
-  const tickets = (detail.recentRetryables || []).map(r => {
+  const mapTicket = r => {
     const exp = Number(r.expires_at)
     const remaining = exp - nowSec
     const state =
@@ -405,7 +405,12 @@ export const fetchChainDetail = async chainId => {
       stKind,
       asset,
     }
-  })
+  }
+  const tickets = (detail.recentRetryables || []).map(mapTicket)
+  // Expired tickets are queried separately (they're the oldest, so they fall
+  // outside the recent window above) so the expired-retryables alert can list
+  // each lapsed ticket individually.
+  const expiredTickets = (detail.expiredRetryables || []).map(mapTicket)
 
   return {
     ...view,
@@ -430,6 +435,7 @@ export const fetchChainDetail = async chainId => {
     batches: detail.recentBatches || [],
     assertions: detail.recentAssertions || [],
     tickets,
+    expiredTickets,
     pendingExits: detail.pendingExits || [],
   }
 }

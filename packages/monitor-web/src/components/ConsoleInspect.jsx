@@ -511,6 +511,11 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                     retryable: { cid: c.parentChainId, h: detail?.tickets?.[0]?.hash, label: 'ticket' },
                   }
                   const tx = txMap[a.monitor]
+                  // The expired-retryables alert (the only crit retryable alert) enumerates
+                  // each lapsed ticket with its own link, mirroring the retryable.tickets panel,
+                  // instead of the single representative link the other alerts use.
+                  const expiredList =
+                    a.monitor === 'retryable' && a.sev === 'crit' ? detail?.expiredTickets : null
                   return (
                     <div key={a.id} style={{ display: 'flex', gap: 11, padding: '6px 0', borderBottom: '1px solid var(--hairline)' }}>
                       <span style={{ color: a.sev === 'crit' ? C.crit : C.warn, flex: 'none' }}>{a.sev === 'crit' ? '✖' : '⚠'}</span>
@@ -519,13 +524,37 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                           {a.title} <span style={{ color: C.com }}>· {a.monitor}</span>
                         </div>
                         <div style={{ color: C.com, fontSize: 11.5, marginTop: 2, fontFamily: 'var(--mono)', lineHeight: 1.45 }}>{a.detail}</div>
-                        {tx && tx.h && (
+                        {expiredList && expiredList.length ? (
+                          <div style={{ marginTop: 6, borderTop: '1px solid var(--hairline)', paddingTop: 6 }}>
+                            {expiredList.map((t, i) => (
+                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '3px 0', fontSize: 11 }}>
+                                <span style={{ color: C.crit }}>●</span>
+                                <span style={{ width: 150 }}>
+                                  <Ext chainId={c.parentChainId} hash={t.hash} tip="View the expired retryable's creating transaction on the parent chain">
+                                    {t.hash ? t.hash.slice(0, 10) + '…' + t.hash.slice(-6) : `msg #${t.messageIndex}`}
+                                  </Ext>
+                                </span>
+                                <span style={{ flex: 1, color: C.txt }}>
+                                  {t.asset && t.asset.amount != null ? (
+                                    <span>
+                                      {F.compact(t.asset.amount, t.asset.symbol || '')}
+                                      {t.asset.usd != null ? <span style={{ color: C.com }}> ({F.money(t.asset.usd)})</span> : null}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: C.com }}>·</span>
+                                  )}
+                                </span>
+                                <span style={{ color: C.com }}>expired {F.ago(t.expiresAt)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : tx && tx.h ? (
                           <div style={{ marginTop: 4, fontSize: 11 }}>
                             <Ext chainId={tx.cid} hash={tx.h} tip="View the related transaction">
                               view {tx.label}
                             </Ext>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                       {a.ts && <span style={{ color: C.com, fontSize: 11, flex: 'none' }}>{F.ago(a.ts)}</span>}
                     </div>

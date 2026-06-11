@@ -478,7 +478,23 @@ export class FleetDb {
   // enrichment (token + amount) and the latest USD price for that asset. Falls
   // back to the plain ticket list if the enrichment table/columns aren't there
   // yet (worker not deployed), so retryables always render.
-  private async readRetryables(chainId: number) {
+  // `mode: 'recent'` returns the 25 most-recently-created tickets (the default
+  // detail list). `mode: 'expired'` returns tickets that have passed their
+  // 7-day timeout (expires_at <= now), ordered by how recently they lapsed —
+  // these are the OLDEST tickets, so they fall outside the recent-25 window and
+  // must be queried explicitly for the alerts panel to enumerate them.
+  private async readRetryables(
+    chainId: number,
+    mode: 'recent' | 'expired' = 'recent'
+  ) {
+    const isExpired = mode === 'expired'
+    // clause builder: `pfx` prefixes columns ('rt.' for the enriched join, '' for the plain fallback)
+    const where = (pfx: string) =>
+      isExpired ? `and ${pfx}expires_at <= extract(epoch from now())` : ''
+    const order = (pfx: string) =>
+      isExpired
+        ? `order by ${pfx}expires_at desc`
+        : `order by ${pfx}parent_block_timestamp desc, ${pfx}log_index desc`
     const enriched = `
       select
         rt.*,
@@ -497,8 +513,8 @@ export class FleetDb {
         order by checked_at desc
         limit 1
       ) p on true
-      where rt.chain_id = $1
-      order by rt.parent_block_timestamp desc, rt.log_index desc
+      where rt.chain_id = $1 ${where('rt.')}
+      ${order('rt.')}
       limit 25
     `
     try {
@@ -511,8 +527,8 @@ export class FleetDb {
         `
           select *
           from ${this.retryableTicketsTable}
-          where chain_id = $1
-          order by parent_block_timestamp desc, log_index desc
+          where chain_id = $1 ${where('')}
+          ${order('')}
           limit 25
         `,
         [chainId]
@@ -860,7 +876,7 @@ export class FleetDb {
       return null
     }
 
-    const [chains, batchRows, assertionRows, retryableRows, rpcRows, exitRows] =
+    const [chains, batchRows, assertionRows, retryableRows, expiredRetryableRows, rpcRows, exitRows] =
       await Promise.all([
         this.readFleetChains(),
         this.pool.query(
@@ -884,6 +900,7 @@ export class FleetDb {
           [chainId]
         ),
         this.readRetryables(chainId),
+        this.readRetryables(chainId, 'expired'),
         // RPC probe history bucketed across the FULL available window (up to the
         // 8-day prune horizon) into a fixed number of bars, so the chart spans
         // all probes in the DB regardless of probe interval — not just the last
@@ -936,6 +953,7 @@ export class FleetDb {
       recentBatches: batchRows.rows,
       recentAssertions: assertionRows.rows,
       recentRetryables: retryableRows.rows,
+      expiredRetryables: expiredRetryableRows.rows,
       rpcBuckets: rpcRows.rows,
       pendingExits: exitRows.rows,
     }
