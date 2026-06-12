@@ -201,6 +201,9 @@ export const toViewChain = c => {
       urgent,
       expired,
       expiringSoon: Math.max(urgent - expired, 0),
+      // total retryables seen in the window (incl. redeemed) — the activity
+      // denominator next to the still-pending `open` count
+      seen: c.retryableSeenCount || 0,
       // highest USD value among this chain's expiring/expired retryables, or
       // null when none are priced (drives the 💰 at-risk indicator)
       atRiskUsd: c.retryableAtRiskUsd ?? null,

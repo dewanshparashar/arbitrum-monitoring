@@ -241,6 +241,7 @@ export function Console() {
     tvlUsd: overview?.totalTvlUsd ?? 0,
     pendingUsd: overview?.totalPendingOutUsd ?? 0,
     openRetryables: overview?.retryablesOpen ?? 0,
+    seenRetryables: overview?.retryablesSeen ?? 0,
     activeAlerts: overview?.alerts ?? 0,
   }
 
@@ -487,7 +488,7 @@ export function Console() {
                 <span style={{ ...col(74, 'right'), color: c.batch.lastMins != null && c.batch.lastMins > c.batch.targetMins * 2 ? C.crit : C.com }}>
                   {F.dur(c.batch.lastMins)}
                 </span>
-                <span style={{ ...col(86, 'right'), color: c.retry.urgent > 0 ? C.warn : C.com }}>
+                <span style={{ ...col(86, 'right'), color: C.com }}>
                   {c.retry.atRiskUsd != null && c.retry.atRiskUsd >= HIGH_VALUE_USD ? (
                     <Tip
                       w={250}
@@ -496,8 +497,15 @@ export function Console() {
                       <span style={{ marginRight: 4 }}>💰</span>
                     </Tip>
                   ) : null}
-                  {c.retry.open}
-                  {c.retry.urgent > 0 ? <span style={{ color: C.warn }}>·{c.retry.urgent}!</span> : ''}
+                  <Tip
+                    w={260}
+                    label={`${c.retry.open} pending / ${c.retry.seen} seen in the indexed window. "Pending" excludes tickets confirmed redeemed on the child chain${c.retry.urgent > 0 ? ` — ${c.retry.urgent} of them are expiring soon or already expired` : ''}.`}
+                  >
+                    <span style={{ color: c.retry.expired > 0 ? C.crit : c.retry.urgent > 0 ? C.warn : c.retry.open > 0 ? C.txt : C.com }}>
+                      {c.retry.open}
+                    </span>
+                    <span style={{ color: C.com }}>/{c.retry.seen}</span>
+                  </Tip>
                 </span>
                 <span style={{ ...col(46, 'right'), color: c.alerts > 0 ? (c.health === 'crit' ? C.crit : C.warn) : C.com }}>
                   {c.alerts > 0 ? c.alerts : '·'}
@@ -537,7 +545,7 @@ export function Console() {
         <span style={{ flex: 1 }} />
         <span style={{ padding: '0 11px', opacity: 0.92 }}>TVL {F.money(fleet.tvlUsd)}</span>
         <span style={{ padding: '0 11px', opacity: 0.92 }}>pending {F.money(fleet.pendingUsd)}</span>
-        <span style={{ padding: '0 11px', opacity: 0.92 }}>retryables {fleet.openRetryables}</span>
+        <span style={{ padding: '0 11px', opacity: 0.92 }}>retryables {fleet.openRetryables}/{fleet.seenRetryables}</span>
         <IndexStatus statusInfo={statusInfo} />
       </div>
 

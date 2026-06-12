@@ -59,6 +59,7 @@ type RetryableSummaryRow = {
   total_count: string
   expiring_count: string
   expired_count: string
+  seen_count: string
 }
 
 // Highest USD value among a chain's expiring-or-expired retryables (the value
@@ -136,6 +137,7 @@ type FleetChain = {
   openRetryCount: number
   openRetryUrgentCount: number
   expiredRetryableCount: number
+  retryableSeenCount: number
   retryableAtRiskUsd: number | null
   rpcScore: number | null
   rpcChecks8d: number
@@ -504,7 +506,8 @@ export class FleetDb {
             rt.chain_id,
             count(*) filter (where ${redeemed}) as total_count,
             count(*) filter (where ${redeemed} and rt.expires_at > $1 and rt.expires_at - $1 <= 72 * 60 * 60) as expiring_count,
-            count(*) filter (where ${redeemed} and rt.expires_at <= $1) as expired_count
+            count(*) filter (where ${redeemed} and rt.expires_at <= $1) as expired_count,
+            count(*) as seen_count
           from ${this.retryableTicketsTable} rt
           left join ${this.retryableRedemptionsTable} rr on rr.id = rt.id
           group by rt.chain_id
@@ -521,7 +524,8 @@ export class FleetDb {
             chain_id,
             count(*) as total_count,
             count(*) filter (where expires_at > $1 and expires_at - $1 <= 72 * 60 * 60) as expiring_count,
-            count(*) filter (where expires_at <= $1) as expired_count
+            count(*) filter (where expires_at <= $1) as expired_count,
+            count(*) as seen_count
           from ${this.retryableTicketsTable}
           group by chain_id
         `,
@@ -618,6 +622,7 @@ export class FleetDb {
         critical: chains.filter(chain => chain.alerts >= 3).length,
       },
       retryablesOpen: chains.reduce((sum, chain) => sum + chain.openRetryCount, 0),
+      retryablesSeen: chains.reduce((sum, chain) => sum + chain.retryableSeenCount, 0),
       retryablesUrgent: chains.reduce(
         (sum, chain) => sum + chain.openRetryUrgentCount,
         0
@@ -893,6 +898,7 @@ export class FleetDb {
           openRetryUrgentCount:
             parseCount(retryable?.expiring_count) + parseCount(retryable?.expired_count),
           expiredRetryableCount: parseCount(retryable?.expired_count),
+          retryableSeenCount: parseCount(retryable?.seen_count),
           retryableAtRiskUsd:
             retryableValue?.at_risk_max_usd != null
               ? Number(retryableValue.at_risk_max_usd)

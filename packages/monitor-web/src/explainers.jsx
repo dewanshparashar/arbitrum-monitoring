@@ -229,7 +229,7 @@ export const HEADERS = {
   tvl: 'Value of the native asset (ETH, or the chain\'s custom gas token) locked in the canonical bridge × its USD price. USD shows only where a price feed exists; custom gas tokens without a feed show n/a here and the native amount in the inspector.',
   pending: 'Native-asset value in L2→L1 withdrawals that left the chain but aren\'t yet claimed on the parent. Derived (not indexed): ArbSys L2ToL1Tx events minus the parent Outbox\'s OutBoxTransactionExecuted, summed by callvalue. Native-value only (ERC-20 withdrawals excluded); USD where a price feed exists, else the gas token. Full algorithm in ? explain.',
   batch: 'Time since the sequencer last posted a batch to the parent chain. Turns red past 4× the target interval.',
-  retry: 'Open retryable (parent→child) tickets in the window. The trailing ·N! flags urgent ones (expiring within 2 days or already expired).',
+  retry: 'pending / seen retryable (parent→child) tickets in the window. "seen" is everything created; "pending" excludes tickets confirmed redeemed on the child chain (the worker reconciles real redemption status via the Arbitrum SDK). Pending turns amber/red when tickets are expiring within 2 days or already expired.',
   alert: 'Count of R/B/A monitors currently firing (not healthy) for this chain, 0–3.',
   lat: 'Latency of the latest successful RPC probe (eth_blockNumber).',
   tps: 'Estimated transactions per second on the chain itself — total txns across its last ~20 blocks divided by the window\'s time span, sampled from the chain\'s own RPC each worker cycle (the ~ prefix denotes an estimate). Not indexed (zero indexer overhead); most dedicated chains idle near 0.',

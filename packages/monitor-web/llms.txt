@@ -22,7 +22,7 @@ FleetWatch continuously indexes Arbitrum dedicated chains and exposes a stateles
 - `pendingOutUsd` | `pendingOutNative` + count
 - `lastBatchAt` (unix seconds), `lastBatchSequenceNumber`
 - `latestAssertionCreatedAt`, `latestAssertionConfirmedAt`, `createdAssertions8d`, `confirmedAssertions8d`
-- `openRetryCount`, `expiredRetryableCount`, `retryableAtRiskUsd` (highest USD value among the chain's expiring-or-expired retryables, or null when none are priced). These exclude tickets confirmed REDEEMED on the child chain — the worker reconciles each ticket's real redemption status via the Arbitrum SDK, so counts reflect genuinely-unredeemed tickets, not every ticket ever created.
+- `openRetryCount` (pending), `expiredRetryableCount`, `retryableAtRiskUsd` (highest USD value among the chain's expiring-or-expired retryables, or null when none are priced). These exclude tickets confirmed REDEEMED on the child chain — the worker reconciles each ticket's real redemption status via the Arbitrum SDK, so counts reflect genuinely-unredeemed tickets. `retryableSeenCount` is the total created in the window (incl. redeemed), i.e. the activity denominator: the UI shows `openRetryCount / retryableSeenCount`.
 - `arbosVersion` (number, e.g. 32), `arbosName` (e.g. "Bianca"), `batchPoster` (EOA address)
 
 ## Notes for agents
