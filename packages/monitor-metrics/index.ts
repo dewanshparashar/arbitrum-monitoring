@@ -619,8 +619,15 @@ class MetricsDb {
     await this.pool.query(
       `delete from ${this.pricesTable} where checked_at < now() - interval '8 days'`
     )
+    // Unlike rpc/balance/price samples, a pending withdrawal is a *state* that
+    // persists until it's claimed on the parent — there's no timeout that ages
+    // it out (only retryables expire). So we keep unexecuted exits indefinitely
+    // and only prune ones already executed, 8 days after they were claimed.
+    // Pruning by started_at would drop genuinely-pending withdrawals once they
+    // pass the ~6.4-day challenge window, undercounting the backlog.
     await this.pool.query(
-      `delete from ${this.exitsTable} where started_at < now() - interval '8 days'`
+      `delete from ${this.exitsTable}
+       where executed_at is not null and executed_at < now() - interval '8 days'`
     )
     // drop enrichment for tickets the indexer has aged out of its window
     try {
@@ -1151,8 +1158,15 @@ const syncParentExitExecutions = async ({
 // signal and these RPCs simply don't serve logs.
 const exitSyncWarned = new Set<number>()
 
+// How far back a *fresh* exit cursor scans (no persisted cursor yet — first run
+// or a new chain). Exits don't expire, so this must comfortably exceed the
+// challenge period (~6.4d) plus however long a claimable withdrawal might sit
+// unclaimed, or the initial backfill would miss still-pending withdrawals.
+const EXIT_BACKFILL_SECONDS =
+  Number(process.env.MONITOR_METRICS_EXIT_BACKFILL_DAYS || 30) * 24 * 60 * 60
+
 const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
-  const oldestSeconds = Math.floor(Date.now() / 1000) - eightDaysSeconds
+  const oldestSeconds = Math.floor(Date.now() / 1000) - EXIT_BACKFILL_SECONDS
   const backlog: unknown[] = []
 
   for (const chain of getMainnetChains()) {
