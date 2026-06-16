@@ -667,12 +667,12 @@ export class FleetDb {
             max(case when events.kind = 'created' then events.parent_block_timestamp end) as latest_created_at,
             max(case when events.kind = 'confirmed' then events.parent_block_timestamp end) as latest_confirmed_at,
             latest.event_name as latest_event_name,
-            count(*) filter (where events.kind = 'created') as created_count,
-            count(*) filter (where events.kind = 'confirmed') as confirmed_count
+            count(*) filter (where events.kind = 'created' and events.parent_block_timestamp >= $1) as created_count,
+            count(*) filter (where events.kind = 'confirmed' and events.parent_block_timestamp >= $1) as confirmed_count
           from ${this.assertionEventsTable} events
           left join latest on latest.chain_id = events.chain_id
           group by events.chain_id, latest.event_name
-        `),
+        `, [nowSeconds - 8 * 24 * 60 * 60]),
         this.readRetryableSummary(nowSeconds),
         // Highest USD value among each chain's expiring-or-expired retryables
         // (expires_at within the next 72h or already past). Joins the worker's

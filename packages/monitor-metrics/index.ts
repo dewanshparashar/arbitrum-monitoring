@@ -73,6 +73,7 @@ class MetricsDb {
   private readonly exitsTable: string
   private readonly chainRuntimeTable: string
   private readonly batchDeliveriesTable: string
+  private readonly assertionEventsTable: string
   private readonly retryableTicketsTable: string
   private readonly retryableAssetsTable: string
   private readonly retryableRedemptionsTable: string
@@ -91,6 +92,8 @@ class MetricsDb {
     this.chainRuntimeTable = tableName(this.schemaName, 'chain_runtime')
     // indexer-owned table, read-only here, to find recent batch tx hashes
     this.batchDeliveriesTable = tableName(this.schemaName, 'batch_deliveries')
+    // indexer-owned (pruned here for retention; not otherwise read by the worker)
+    this.assertionEventsTable = tableName(this.schemaName, 'assertion_events')
     // indexer-owned (read-only); we enrich each ticket with what it transfers
     this.retryableTicketsTable = tableName(this.schemaName, 'retryable_tickets')
     this.retryableAssetsTable = tableName(this.schemaName, 'retryable_assets')
@@ -610,14 +613,18 @@ class MetricsDb {
   }
 
   async prune() {
+    // rpc_checks genuinely backs the 8-day uptime score + sparkline — keep 8d.
     await this.pool.query(
       `delete from ${this.rpcChecksTable} where checked_at < now() - interval '8 days'`
     )
+    // The API only reads the latest balance per chain plus one ~24h-ago sample
+    // (for the 24h delta), so a 3-day tail is plenty.
     await this.pool.query(
-      `delete from ${this.balanceSnapshotsTable} where checked_at < now() - interval '8 days'`
+      `delete from ${this.balanceSnapshotsTable} where checked_at < now() - interval '3 days'`
     )
+    // Only the latest price per asset is ever read; keep a short safety tail.
     await this.pool.query(
-      `delete from ${this.pricesTable} where checked_at < now() - interval '8 days'`
+      `delete from ${this.pricesTable} where checked_at < now() - interval '2 days'`
     )
     // Unlike rpc/balance/price samples, a pending withdrawal is a *state* that
     // persists until it's claimed on the parent — there's no timeout that ages
@@ -629,7 +636,19 @@ class MetricsDb {
       `delete from ${this.exitsTable}
        where executed_at is not null and executed_at < now() - interval '8 days'`
     )
-    // drop enrichment for tickets the indexer has aged out of its window
+
+    // Indexer-owned (Ponder) tables grow unbounded from a fixed startBlock and
+    // are never pruned by Ponder. The app only reads recent rows, so apply an
+    // eager cutoff well outside any reorg window. Batch deliveries are the heavy
+    // ones (L1 batch calldata) yet we only need latest + 24h burn + ~25 recent,
+    // so 2 days. Assertions/retryables are lifecycle-bound (confirm periods /
+    // 7-day expiry) and tiny, so they keep wider windows.
+    const nowSeconds = Math.floor(Date.now() / 1000)
+    await this.pruneIndexerTable(this.batchDeliveriesTable, nowSeconds - BATCH_RETENTION_SECONDS)
+    await this.pruneIndexerTable(this.assertionEventsTable, nowSeconds - ASSERTION_RETENTION_SECONDS)
+    await this.pruneIndexerTable(this.retryableTicketsTable, nowSeconds - RETRYABLE_RETENTION_SECONDS)
+
+    // drop enrichment for tickets pruned above or aged out of the indexer window
     try {
       await this.pool.query(
         `delete from ${this.retryableAssetsTable} ra
@@ -646,6 +665,76 @@ class MetricsDb {
       )
     } catch (error) {
       if ((error as { code?: string }).code !== '42P01') throw error
+    }
+
+    // Ponder's raw RPC cache (ponder_sync.*) is never read by our app — it only
+    // serves Ponder's restart-resume and reorg handling. It dominates DB size
+    // (block/tx/log bodies, esp. L1 batch calldata). Keep only a small recent
+    // window: Ponder resumes from its persisted checkpoint, not by re-reading
+    // old cache, and the window is far beyond any reorg horizon.
+    await this.prunePonderSyncCache(nowSeconds)
+  }
+
+  // Eager cutoff for an indexer-owned table, keyed by the parent-chain block
+  // timestamp (epoch seconds). Ponder puts a `live_query` trigger on these
+  // tables that writes to a `live_query_tables` relation only present on its own
+  // live-query connections, so a plain DELETE from here fails. We run inside a
+  // transaction with `session_replication_role = replica` to suppress that
+  // trigger (the app polls the API and doesn't use Ponder live queries, so
+  // skipping the notification for aged-out rows is harmless). Tolerates the
+  // table not existing yet (42P01) and a role that can't set the GUC (42501).
+  private async pruneIndexerTable(table: string, cutoffSeconds: number) {
+    const cutoff = Math.floor(cutoffSeconds)
+    if (!Number.isFinite(cutoff)) return
+    try {
+      // Sent as one simple-query batch (no bind params) so all four statements
+      // run on a single pooled connection and Postgres rolls the whole thing
+      // back cleanly if the DELETE errors — no half-open transaction leaks back
+      // into the pool. `cutoff` is a floored integer, so inlining it is safe.
+      await this.pool.query(
+        `begin;
+         set local session_replication_role = replica;
+         delete from ${table} where parent_block_timestamp < ${cutoff};
+         commit;`
+      )
+    } catch (error) {
+      const code = (error as { code?: string }).code
+      // 42P01 = table not migrated yet; 42501 = role can't set the GUC. Both
+      // are non-fatal — the worker should keep running and try again next cycle.
+      if (code !== '42P01' && code !== '42501') throw error
+    }
+  }
+
+  // Trim Ponder's sync cache to a recent window. Gated to run at most hourly
+  // since it's a multi-table delete. Deletes dependent rows (transactions,
+  // logs, receipts, traces, rpc cache) whose block is older than the cutoff,
+  // then the blocks themselves. `intervals` is left intact so Ponder still
+  // considers those ranges synced and never re-fetches them.
+  private async prunePonderSyncCache(nowSeconds: number) {
+    const stateKey = 'ponder_sync_pruned_at'
+    const last = Number((await this.getState(stateKey)) || 0)
+    if (nowSeconds - last < PONDER_CACHE_PRUNE_INTERVAL_SECONDS) return
+    const cutoff = nowSeconds - PONDER_CACHE_RETENTION_SECONDS
+    try {
+      for (const table of ['transactions', 'transaction_receipts', 'logs', 'traces', 'rpc_request_results']) {
+        await this.pool.query(
+          `delete from ponder_sync.${table} t
+           using ponder_sync.blocks b
+           where t.chain_id = b.chain_id and t.block_number = b.number
+             and b."timestamp" < $1`,
+          [cutoff]
+        )
+      }
+      await this.pool.query(
+        `delete from ponder_sync.blocks where "timestamp" < $1`,
+        [cutoff]
+      )
+      await this.setState(stateKey, String(nowSeconds))
+    } catch (error) {
+      // ponder_sync may be absent (separate DB, or pre-migration): 3F000 =
+      // invalid_schema_name, 42P01 = undefined_table. Anything else is real.
+      const code = (error as { code?: string }).code
+      if (code !== '3F000' && code !== '42P01') throw error
     }
   }
 
@@ -1164,6 +1253,25 @@ const exitSyncWarned = new Set<number>()
 // unclaimed, or the initial backfill would miss still-pending withdrawals.
 const EXIT_BACKFILL_SECONDS =
   Number(process.env.MONITOR_METRICS_EXIT_BACKFILL_DAYS || 30) * 24 * 60 * 60
+
+const DAY_SECONDS = 24 * 60 * 60
+// Retention for indexer-owned tables (see prune()). Batch deliveries are heavy
+// (L1 calldata) and only need latest + 24h burn + ~25 recent → 2 days.
+// Retryables live 7 days, so 10 keeps every still-live ticket plus a tail of
+// recently-expired ones the UI surfaces. Assertions keep ~9 days to back the
+// 8-day created/confirmed counts.
+const BATCH_RETENTION_SECONDS =
+  Number(process.env.MONITOR_METRICS_BATCH_RETENTION_DAYS || 2) * DAY_SECONDS
+const ASSERTION_RETENTION_SECONDS =
+  Number(process.env.MONITOR_METRICS_ASSERTION_RETENTION_DAYS || 9) * DAY_SECONDS
+const RETRYABLE_RETENTION_SECONDS =
+  Number(process.env.MONITOR_METRICS_RETRYABLE_RETENTION_DAYS || 10) * DAY_SECONDS
+// Ponder's RPC cache (ponder_sync.*) is never read by the app — keep a small
+// recent window for reorg/restart only, pruned at most hourly.
+const PONDER_CACHE_RETENTION_SECONDS =
+  Number(process.env.MONITOR_METRICS_PONDER_CACHE_RETENTION_DAYS || 2) * DAY_SECONDS
+const PONDER_CACHE_PRUNE_INTERVAL_SECONDS =
+  Number(process.env.MONITOR_METRICS_PONDER_CACHE_PRUNE_INTERVAL_HOURS || 1) * 60 * 60
 
 const syncExitMessages = async (db: MetricsDb, chunkSize: number) => {
   const oldestSeconds = Math.floor(Date.now() / 1000) - EXIT_BACKFILL_SECONDS
