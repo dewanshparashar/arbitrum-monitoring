@@ -348,14 +348,15 @@ class MetricsDb {
   }) {
     await this.pool.query(
       `
-        insert into ${this.retryableRedemptionsTable}
+        insert into ${this.retryableRedemptionsTable} as rr
           (id, chain_id, status, child_ticket_id, redeemed_at, checked_at)
         values ($1, $2, $3, $4, case when $3 = 'redeemed' then $5::timestamptz else null end, $5)
         on conflict (id) do update
         set status = excluded.status,
             child_ticket_id = excluded.child_ticket_id,
-            -- preserve the first time we saw it redeemed
-            redeemed_at = coalesce(${this.retryableRedemptionsTable}.redeemed_at, excluded.redeemed_at),
+            -- preserve the first time we saw it redeemed (alias the target; a
+            -- schema-qualified self-reference is unreliable in ON CONFLICT)
+            redeemed_at = coalesce(rr.redeemed_at, excluded.redeemed_at),
             checked_at = excluded.checked_at
       `,
       [row.id, row.chainId, row.status, row.childTicketId, row.checkedAt]
@@ -532,19 +533,22 @@ class MetricsDb {
     lastBatchSeq: string
     checkedAt: string
   }) {
+    // NB: alias the conflict target as `cr` and reference the existing row
+    // through it. A schema-qualified reference (fleet_register_v2.chain_runtime
+    // .batch_count) is NOT a reliable way to read the pre-update row in
+    // ON CONFLICT DO UPDATE — the increase comparison never evaluates true, so
+    // the timestamp would never stamp even as the count climbs.
     await this.pool.query(
       `
-        insert into ${this.chainRuntimeTable} (chain_id, batch_count, last_batch_seq, last_batch_seen_at, checked_at)
+        insert into ${this.chainRuntimeTable} as cr (chain_id, batch_count, last_batch_seq, last_batch_seen_at, checked_at)
         values ($1, $2, null, null, $4)
         on conflict (chain_id) do update
         set last_batch_seen_at = case
-              when ${this.chainRuntimeTable}.batch_count is not null
-                and excluded.batch_count > ${this.chainRuntimeTable}.batch_count
-              then now() else ${this.chainRuntimeTable}.last_batch_seen_at end,
+              when cr.batch_count is not null and excluded.batch_count > cr.batch_count
+              then now() else cr.last_batch_seen_at end,
             last_batch_seq = case
-              when ${this.chainRuntimeTable}.batch_count is not null
-                and excluded.batch_count > ${this.chainRuntimeTable}.batch_count
-              then $3 else ${this.chainRuntimeTable}.last_batch_seq end,
+              when cr.batch_count is not null and excluded.batch_count > cr.batch_count
+              then $3 else cr.last_batch_seq end,
             batch_count = excluded.batch_count,
             checked_at = excluded.checked_at
       `,
