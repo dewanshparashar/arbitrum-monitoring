@@ -17,6 +17,7 @@ import {
   getLogs,
   getRetryableTransfer,
   getRollupBaseStake,
+  getSequencerBatchCount,
   getTransactionFeeWei,
   getTransactionSender,
   getValidatorWhitelistDisabled,
@@ -186,6 +187,12 @@ class MetricsDb {
       'validator_whitelist_disabled boolean',
       'child_head_block numeric(78, 0)',
       'daily_burn_wei numeric(78, 0)',
+      // Live batch freshness probed directly from the SequencerInbox, so it's
+      // accurate even when the parent-chain indexer lags. batch_count is the
+      // last-seen total; last_batch_seen_at is when we last saw it increase.
+      'batch_count numeric(78, 0)',
+      'last_batch_seq numeric(78, 0)',
+      'last_batch_seen_at timestamptz',
     ]) {
       await this.pool.query(`alter table ${this.chainRuntimeTable} add column if not exists ${col}`)
     }
@@ -508,6 +515,40 @@ class MetricsDb {
             checked_at = excluded.checked_at
       `,
       [row.chainId, row.batchPoster, row.posterBalanceWei, row.dailyBurnWei, row.checkedAt]
+    )
+  }
+
+  // Live batch freshness from the SequencerInbox. `last_batch_seen_at` is only
+  // bumped when we observe the on-chain batch count *actually increase* between
+  // cycles — so an actively-posting chain reads fresh within one cycle even if
+  // the parent indexer is hours behind, while a genuinely stalled chain keeps
+  // its old timestamp (the count doesn't move) and still flags. We deliberately
+  // do NOT stamp now() on the first observation (when the prior count is
+  // unknown): that would mask a real outage right after a worker restart. Until
+  // a real increase is seen the API falls back to the indexer's timestamp.
+  async upsertChainBatchFreshness(row: {
+    chainId: number
+    batchCount: string
+    lastBatchSeq: string
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.chainRuntimeTable} (chain_id, batch_count, last_batch_seq, last_batch_seen_at, checked_at)
+        values ($1, $2, null, null, $4)
+        on conflict (chain_id) do update
+        set last_batch_seen_at = case
+              when ${this.chainRuntimeTable}.batch_count is not null
+                and excluded.batch_count > ${this.chainRuntimeTable}.batch_count
+              then now() else ${this.chainRuntimeTable}.last_batch_seen_at end,
+            last_batch_seq = case
+              when ${this.chainRuntimeTable}.batch_count is not null
+                and excluded.batch_count > ${this.chainRuntimeTable}.batch_count
+              then $3 else ${this.chainRuntimeTable}.last_batch_seq end,
+            batch_count = excluded.batch_count,
+            checked_at = excluded.checked_at
+      `,
+      [row.chainId, row.batchCount, row.lastBatchSeq, row.checkedAt]
     )
   }
 
@@ -1417,6 +1458,28 @@ const syncChainRuntime = async (db: MetricsDb) => {
         })
       } catch (error) {
         console.error(`batch poster read failed for ${chain.slug}`, error)
+      }
+
+      // Live batch freshness — read the SequencerInbox batch count directly on
+      // the parent chain (one eth_call, no log-range limits). This is immune to
+      // parent-indexer lag, so a chain that's actively posting won't false-flag
+      // "stalled" just because Ponder is behind on a busy parent like Arb One.
+      try {
+        const parentRpcUrl = parentRpcUrls[chain.parentChainId]
+        const sequencerInbox = chain.ethBridge.sequencerInbox as `0x${string}`
+        if (parentRpcUrl && sequencerInbox) {
+          const batchCount = await getSequencerBatchCount(parentRpcUrl, sequencerInbox)
+          // batchCount is the total number of batches; the latest seq is one less.
+          const lastBatchSeq = batchCount > 0n ? batchCount - 1n : 0n
+          await db.upsertChainBatchFreshness({
+            chainId: chain.chainId,
+            batchCount: batchCount.toString(),
+            lastBatchSeq: lastBatchSeq.toString(),
+            checkedAt,
+          })
+        }
+      } catch (error) {
+        console.error(`batch count read failed for ${chain.slug}`, error)
       }
 
       // Rollup security params (base stake, validator whitelist) — parent-chain

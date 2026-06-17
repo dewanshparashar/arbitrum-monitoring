@@ -28,6 +28,10 @@ const rollupInfoInterface = new ethers.utils.Interface([
   'function validatorWhitelistDisabled() view returns (bool)',
 ])
 
+const sequencerInboxInterface = new ethers.utils.Interface([
+  'function batchCount() view returns (uint256)',
+])
+
 const l2ToL1Interface = new ethers.utils.Interface([
   'event L2ToL1Tx(address caller, address indexed destination, uint256 indexed hash, uint256 indexed position, uint256 arbBlockNum, uint256 ethBlockNum, uint256 timestamp, uint256 callvalue, bytes data)',
 ])
@@ -258,6 +262,18 @@ export const getRollupBaseStake = async (rpcUrl: string, rollup: string) => {
     retries: 1,
   })
   return BigInt(rollupInfoInterface.decodeFunctionResult('baseStake', result)[0].toString())
+}
+
+// Live total batch count straight from the SequencerInbox (one eth_call, no
+// log-range limits). This is the freshness source of truth: when it increases
+// between cycles a batch was just posted, independent of how far the indexer
+// has caught up. Returns null if the call reverts.
+export const getSequencerBatchCount = async (rpcUrl: string, sequencerInbox: string) => {
+  const data = sequencerInboxInterface.encodeFunctionData('batchCount')
+  const result = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: sequencerInbox, data }, 'latest'], {
+    retries: 1,
+  })
+  return BigInt(sequencerInboxInterface.decodeFunctionResult('batchCount', result)[0].toString())
 }
 
 // true = permissionless validation (whitelist disabled); false = whitelisted.

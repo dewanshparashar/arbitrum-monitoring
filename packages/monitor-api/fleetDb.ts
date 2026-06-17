@@ -90,6 +90,10 @@ type ChainRuntimeRow = {
   validator_whitelist_disabled: boolean | null
   child_head_block: string | null
   daily_burn_wei: string | null
+  // From `select *`; absent until the worker that adds the columns redeploys.
+  // pg returns timestamptz as a Date, so allow both.
+  last_batch_seq?: string | null
+  last_batch_seen_at?: string | Date | null
   checked_at_epoch: number | null
 }
 
@@ -844,9 +848,27 @@ export class FleetDb {
         const priceUsd = priceRow ? Number(priceRow.price_usd) : NaN
         const resolvedPriceUsd = Number.isFinite(priceUsd) ? priceUsd : null
 
+        // Combine the indexer's newest batch with the worker's live
+        // SequencerInbox probe (immune to parent-indexer lag) — whichever is
+        // fresher wins. The probe stamps `last_batch_seen_at` only when the
+        // on-chain batch count actually moves, so it can't fabricate freshness.
+        const probedBatchSeenAt = runtime?.last_batch_seen_at
+          ? Math.floor(new Date(runtime.last_batch_seen_at).getTime() / 1000)
+          : null
+        const indexerBatchAt = batch?.parent_block_timestamp ?? null
+        const lastBatchAt = Math.max(indexerBatchAt ?? 0, probedBatchSeenAt ?? 0) || null
+        // Seq#: prefer the larger of the indexer's and the probe's (count - 1).
+        const indexerBatchSeq = batch?.batch_sequence_number ?? null
+        const lastBatchSequenceNumber =
+          probedBatchSeenAt !== null &&
+          (indexerBatchAt === null || probedBatchSeenAt >= indexerBatchAt) &&
+          runtime?.last_batch_seq != null
+            ? runtime.last_batch_seq
+            : indexerBatchSeq
+
         const batchStatus = getBatchStatus({
           nowSeconds,
-          lastBatchAt: batch?.parent_block_timestamp ?? null,
+          lastBatchAt,
           assertionIntervalSeconds: chain.bridgeUiConfig.assertionIntervalSeconds,
         })
         const assertionStatus = getAssertionStatus({
@@ -888,8 +910,8 @@ export class FleetDb {
             assertion: assertionStatus,
           },
           assertionIntervalSeconds: chain.bridgeUiConfig.assertionIntervalSeconds,
-          lastBatchAt: batch?.parent_block_timestamp ?? null,
-          lastBatchSequenceNumber: batch?.batch_sequence_number ?? null,
+          lastBatchAt,
+          lastBatchSequenceNumber,
           latestAssertionCreatedAt: assertion?.latest_created_at ?? null,
           latestAssertionConfirmedAt: assertion?.latest_confirmed_at ?? null,
           createdAssertions8d: parseCount(assertion?.created_count),
