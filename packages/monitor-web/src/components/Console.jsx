@@ -77,7 +77,9 @@ const MiniUptime = React.memo(function MiniUptime({ history }) {
         if (!b || b.pct == null) {
           return <span key={i} style={{ flex: 1, height: 2, background: 'rgba(255,255,255,0.09)', borderRadius: 1 }} />
         }
-        const color = b.pct < 95 ? C.crit : b.pct < 99.5 || (b.p50 != null && b.p50 > 350) ? C.warn : C.str
+        // any failed probe in the bucket → red (matches the inspector chart),
+        // else slow (p50>350) or sub-99.5% → amber, else green
+        const color = b.anyFailed || b.pct < 95 ? C.crit : b.pct < 99.5 || (b.p50 != null && b.p50 > 350) ? C.warn : C.str
         const lat = b.p50 == null ? 250 : b.p50
         const h = Math.max(0.2, Math.min(1, 1 - lat / 1200)) // faster → taller
         const title = `${b.pct.toFixed(1)}% up${b.p50 != null ? ` · p50 ${b.p50}ms` : ''}`

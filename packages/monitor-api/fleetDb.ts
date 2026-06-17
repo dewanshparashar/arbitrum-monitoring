@@ -146,7 +146,7 @@ type FleetChain = {
   retryableAtRiskUsd: number | null
   rpcScore: number | null
   rpcChecks8d: number
-  rpcHistory: Array<{ pct: number | null; p50: number | null } | null> | null
+  rpcHistory: Array<{ pct: number | null; anyFailed?: boolean; p50: number | null } | null> | null
   lastRpcCheckedAt: number | null
   latencyMs: number | null
   raasProvider: string | null
@@ -198,6 +198,7 @@ type RpcHistoryRow = {
   bucket: number
   total: number
   ok: number
+  any_failed: boolean
   p50: number | null
 }
 
@@ -801,6 +802,7 @@ export class FleetDb {
             width_bucket(ts, lo, extract(epoch from now()) + 1, ${RPC_PREVIEW_BUCKETS}) as bucket,
             count(*)::int as total,
             count(*) filter (where ok)::int as ok,
+            bool_or(not ok) as any_failed,
             cast(round(percentile_cont(0.5) within group (order by latency_ms)
                  filter (where ok and latency_ms is not null)) as int) as p50
           from windowed
@@ -815,7 +817,7 @@ export class FleetDb {
     const retryableValueByChainId = byChainId(retryableValueRows.rows)
     const rpcByChainId = byChainId(rpcRows.rows)
     // group the bucketed history into a fixed-length array per chain
-    const rpcHistByChainId = new Map<number, Array<{ pct: number | null; p50: number | null } | null>>()
+    const rpcHistByChainId = new Map<number, Array<{ pct: number | null; anyFailed?: boolean; p50: number | null } | null>>()
     for (const row of rpcHistRows.rows) {
       const cid = Number(row.chain_id)
       let arr = rpcHistByChainId.get(cid)
@@ -827,6 +829,7 @@ export class FleetDb {
       const total = Number(row.total) || 0
       arr[idx] = {
         pct: total ? (Number(row.ok) / total) * 100 : null,
+        anyFailed: !!row.any_failed,
         p50: row.p50 != null ? Number(row.p50) : null,
       }
     }
