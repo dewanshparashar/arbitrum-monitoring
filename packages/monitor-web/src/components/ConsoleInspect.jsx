@@ -120,6 +120,12 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
     batchProbeAhead && c?.batchPoster
       ? { hash: c.batchPoster, kind: 'addr', tip: 'Indexer is catching up — view the batch poster’s recent batches on the parent explorer' }
       : { hash: batchTx, kind: 'tx', tip: 'Last SequencerInbox batch-posting transaction' }
+  // How far the parent indexer trails the live chain, derived from the gap
+  // between the live batch-count probe and the newest *indexed* batch. Used to
+  // flag metrics (e.g. block backlog) that are still computed off indexed data.
+  const indexerLagMins = batchProbeAhead
+    ? Math.round((c.batch.lastBatchAt - indexedBatchAt) / 60)
+    : null
   const assertionTx = detail?.assertions?.[0]?.transaction_hash
   const contracts = detail?.contracts || {}
 
@@ -412,7 +418,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
                 <KV k={<Tip underline label="On-chain balance of the batch-poster EOA on the parent chain (it pays posting gas from this), read by the worker each cycle.">poster balance</Tip>} v={c.batch.posterBalanceEth != null ? F.compact(c.batch.posterBalanceEth, 'ETH') : <Gap what="batch poster not resolved / worker not deployed yet" />} vColor={c.batch.posterBalanceEth != null && c.batch.posterBalanceEth < 0.05 ? C.warn : C.txt} />
                 <KV k={<Tip underline label="Days the batch poster can keep posting before running dry — poster balance ÷ estimated daily gas burn (avg fee of recent batch txs × batches posted in 24h). Estimate.">runway</Tip>} v={c.batch.runwayDays != null ? '~' + (c.batch.runwayDays >= 1000 ? F.compact(c.batch.runwayDays) : c.batch.runwayDays.toFixed(c.batch.runwayDays < 10 ? 1 : 0)) + ' days' : <Gap what="no batch activity in 24h / worker not deployed yet" />} vColor={c.batch.runwayDays != null && c.batch.runwayDays < 7 ? C.crit : c.batch.runwayDays != null && c.batch.runwayDays < 30 ? C.warn : C.txt} />
                 <KV k={<Tip underline label="Calldata compression ratio (brotli).">compression</Tip>} v={<Gap what="needs per-batch calldata analysis (follow-up)" />} />
-                <KV k={<Tip underline label="Child-chain blocks produced but not yet reported in a batch = chain head − last batch's max block.">block backlog</Tip>} v={c.batch.blockBacklog != null ? F.num(c.batch.blockBacklog) + ' blocks' : <Gap what="needs child head + a batch (worker not deployed yet)" />} vColor={c.batch.blockBacklog != null && c.batch.blockBacklog > 50000 ? C.warn : C.txt} />
+                <KV k={<Tip underline label="Child-chain blocks produced but not yet reported in a batch = chain head − last batch's max block. Measured against the last INDEXED batch, so while the parent indexer is behind this is overstated — the chain's actual latest batch isn't included yet.">block backlog</Tip>} v={c.batch.blockBacklog != null ? F.num(c.batch.blockBacklog) + ' blocks' : <Gap what="needs child head + a batch (worker not deployed yet)" />} vColor={indexerLagMins != null ? C.warn : c.batch.blockBacklog != null && c.batch.blockBacklog > 50000 ? C.warn : C.txt} sub={indexerLagMins != null ? `indexer ~${F.dur(indexerLagMins)} behind · latest batch not included` : undefined} />
               </div>
             </Panel>
 
