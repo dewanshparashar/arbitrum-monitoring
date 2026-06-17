@@ -106,6 +106,20 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
   const c = detail || chain
   const alerts = synthesizeAlerts(chain)
   const batchTx = detail?.batches?.[0]?.transaction_hash
+  const indexedBatchAt = detail?.batches?.[0]?.parent_block_timestamp
+  // The SequencerInbox batch-count probe (c.batch.lastBatchAt) can be fresher
+  // than the newest *indexed* batch when the parent indexer lags. When it is,
+  // the indexed-tx deep link would point at a stale batch — so fall back to the
+  // poster's address page on the parent explorer (a live stream of recent
+  // batches) rather than show "5m ago" linking to a 6h-old tx.
+  const batchProbeAhead =
+    c?.batch?.lastBatchAt != null &&
+    indexedBatchAt != null &&
+    c.batch.lastBatchAt - indexedBatchAt > 600
+  const batchLink =
+    batchProbeAhead && c?.batchPoster
+      ? { hash: c.batchPoster, kind: 'addr', tip: 'Indexer is catching up — view the batch poster’s recent batches on the parent explorer' }
+      : { hash: batchTx, kind: 'tx', tip: 'Last SequencerInbox batch-posting transaction' }
   const assertionTx = detail?.assertions?.[0]?.transaction_hash
   const contracts = detail?.contracts || {}
 
@@ -374,7 +388,7 @@ export const ConsoleInspect = React.memo(function ConsoleInspect({ chain, onClos
               <KV
                 k="last batch"
                 v={
-                  <Ext chainId={c.parentChainId} hash={batchTx} tip="Last SequencerInbox batch-posting transaction" color={c.batch.lastMins != null && c.batch.lastMins > c.batch.targetMins * 2 ? C.crit : C.fn}>
+                  <Ext chainId={c.parentChainId} hash={batchLink.hash} kind={batchLink.kind} tip={batchLink.tip} color={c.batch.lastMins != null && c.batch.lastMins > c.batch.targetMins * 2 ? C.crit : C.fn}>
                     {F.dur(c.batch.lastMins)}
                   </Ext>
                 }
