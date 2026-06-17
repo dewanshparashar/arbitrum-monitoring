@@ -404,6 +404,7 @@ export function Console() {
             <span style={col(160, 'right')}><Tip underline w={280} label={HEADERS.tvl}>bridged tvl</Tip></span>
             <span style={col(140, 'right')}><Tip underline w={260} label={HEADERS.pending}>pending out</Tip></span>
             <span style={col(74, 'right')}><Tip underline w={250} label={HEADERS.batch}>batch</Tip></span>
+            <span style={col(92, 'right')}><Tip underline w={260} label={HEADERS.assertion}>assertion</Tip></span>
             <span style={col(86, 'right')}><Tip underline w={260} label={HEADERS.retry}>retry</Tip></span>
             <span style={col(46, 'right')}><Tip underline w={250} label={HEADERS.alert}>alert</Tip></span>
           </div>
@@ -487,6 +488,9 @@ export function Console() {
                 </span>
                 <span style={{ ...col(74, 'right'), color: c.batch.lastMins != null && c.batch.lastMins > c.batch.targetMins * 2 ? C.crit : C.com }}>
                   {F.dur(c.batch.lastMins)}
+                </span>
+                <span style={{ ...col(92, 'right'), color: c.assertion.lastMins != null && c.assertion.lastMins > c.assertion.targetMins * 4 ? C.crit : c.assertion.lastMins != null && c.assertion.lastMins > c.assertion.targetMins * 2 ? C.warn : C.com }}>
+                  {F.dur(c.assertion.lastMins)}
                 </span>
                 <span style={{ ...col(86, 'right'), color: C.com }}>
                   {c.retry.atRiskUsd != null && c.retry.atRiskUsd >= HIGH_VALUE_USD ? (

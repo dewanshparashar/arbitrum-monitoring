@@ -97,6 +97,10 @@ const batchTargetMins = assertionIntervalSeconds => {
   return Math.round(target / 60)
 }
 
+// Mirrors getAssertionStatus on the API: target = max(interval ?? 1h, 30m).
+const assertionTargetMins = assertionIntervalSeconds =>
+  Math.round(Math.max(assertionIntervalSeconds ?? 3600, 30 * 60) / 60)
+
 const rpcStatus = (score, latency) => {
   if (score == null) return 'idle'
   if (score < 95) return 'crit'
@@ -187,6 +191,7 @@ export const toViewChain = c => {
     },
     assertion: {
       lastMins: minsSince(c.latestAssertionCreatedAt),
+      targetMins: assertionTargetMins(c.assertionIntervalSeconds),
       latestCreatedAt: c.latestAssertionCreatedAt,
       latestConfirmedAt: c.latestAssertionConfirmedAt,
       intervalSeconds: c.assertionIntervalSeconds,
