@@ -519,14 +519,20 @@ class MetricsDb {
     )
   }
 
-  // Live batch freshness from the SequencerInbox. `last_batch_seen_at` is only
-  // bumped when we observe the on-chain batch count *actually increase* between
-  // cycles — so an actively-posting chain reads fresh within one cycle even if
-  // the parent indexer is hours behind, while a genuinely stalled chain keeps
-  // its old timestamp (the count doesn't move) and still flags. We deliberately
-  // do NOT stamp now() on the first observation (when the prior count is
-  // unknown): that would mask a real outage right after a worker restart. Until
-  // a real increase is seen the API falls back to the indexer's timestamp.
+  // Live batch freshness from the SequencerInbox. `last_batch_seen_at` is
+  // stamped now() in two cases:
+  //   (a) we observe the on-chain batch count actually increase between cycles
+  //       — the ongoing, accurate signal; or
+  //   (b) a one-time seed: we have no timestamp yet AND the live count is
+  //       already ahead of the newest batch the *indexer* has recorded. That
+  //       proves the chain posted after the indexer's last batch, so it's
+  //       provably fresher than the (stale) indexer timestamp — we can clear
+  //       the false "stalled" flag on the first cycle instead of waiting for
+  //       the next batch.
+  // (b) is guarded by `last_batch_seen_at is null` so it fires at most once and
+  // can't repeatedly bump now() while the indexer lags (which would mask a real
+  // outage). A genuinely stalled chain — live count == indexer's count, no
+  // increases — never stamps and keeps flagging via the indexer timestamp.
   async upsertChainBatchFreshness(row: {
     chainId: number
     batchCount: string
@@ -544,11 +550,19 @@ class MetricsDb {
         values ($1, $2, null, null, $4)
         on conflict (chain_id) do update
         set last_batch_seen_at = case
-              when cr.batch_count is not null and excluded.batch_count > cr.batch_count
-              then now() else cr.last_batch_seen_at end,
+              when cr.batch_count is not null and excluded.batch_count > cr.batch_count then now()
+              when cr.last_batch_seen_at is null
+                and excluded.batch_count - 1 > coalesce(
+                  (select max(batch_sequence_number) from ${this.batchDeliveriesTable} bd where bd.chain_id = excluded.chain_id), -1)
+                then now()
+              else cr.last_batch_seen_at end,
             last_batch_seq = case
-              when cr.batch_count is not null and excluded.batch_count > cr.batch_count
-              then $3 else cr.last_batch_seq end,
+              when cr.batch_count is not null and excluded.batch_count > cr.batch_count then $3
+              when cr.last_batch_seen_at is null
+                and excluded.batch_count - 1 > coalesce(
+                  (select max(batch_sequence_number) from ${this.batchDeliveriesTable} bd where bd.chain_id = excluded.chain_id), -1)
+                then $3
+              else cr.last_batch_seq end,
             batch_count = excluded.batch_count,
             checked_at = excluded.checked_at
       `,
