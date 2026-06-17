@@ -32,6 +32,14 @@ const sequencerInboxInterface = new ethers.utils.Interface([
   'function batchCount() view returns (uint256)',
 ])
 
+// Classic Nitro rollup (IRollupCore). BoLD rollups track assertions by hash
+// and have no sequential node getter, so latestNodeCreated() reverts there —
+// which is how getLatestAssertionCreatedAt distinguishes them.
+const rollupNodeInterface = new ethers.utils.Interface([
+  'function latestNodeCreated() view returns (uint64)',
+  'function getNode(uint64) view returns (tuple(bytes32 stateHash, bytes32 challengeHash, bytes32 confirmData, uint64 prevNum, uint64 deadlineBlock, uint64 noChildConfirmedBeforeBlock, uint64 stakerCount, uint64 childStakerCount, uint64 firstChildBlock, uint64 latestChildNumber, uint64 createdAtBlock, bytes32 nodeHash))',
+])
+
 const l2ToL1Interface = new ethers.utils.Interface([
   'event L2ToL1Tx(address caller, address indexed destination, uint256 indexed hash, uint256 indexed position, uint256 arbBlockNum, uint256 ethBlockNum, uint256 timestamp, uint256 callvalue, bytes data)',
 ])
@@ -274,6 +282,34 @@ export const getSequencerBatchCount = async (rpcUrl: string, sequencerInbox: str
     retries: 1,
   })
   return BigInt(sequencerInboxInterface.decodeFunctionResult('batchCount', result)[0].toString())
+}
+
+// Exact parent-chain timestamp of the most recently *created* assertion, read
+// straight from the Rollup (latestNodeCreated -> getNode.createdAtBlock ->
+// block timestamp). Indexer-independent, so it stays accurate even when the
+// parent indexer lags. Returns null for BoLD rollups (no sequential node
+// getter -> latestNodeCreated reverts), for chains with no assertions yet, or
+// on any RPC error — callers fall back to the indexer's timestamp.
+export const getLatestAssertionCreatedAt = async (rpcUrl: string, rollup: string) => {
+  try {
+    const numData = rollupNodeInterface.encodeFunctionData('latestNodeCreated')
+    const numRes = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: rollup, data: numData }, 'latest'], {
+      retries: 1,
+    })
+    const nodeNum = BigInt(rollupNodeInterface.decodeFunctionResult('latestNodeCreated', numRes)[0].toString())
+    if (nodeNum === 0n) return null
+    const nodeData = rollupNodeInterface.encodeFunctionData('getNode', [nodeNum])
+    const nodeRes = await rpcCall<string>(rpcUrl, 'eth_call', [{ to: rollup, data: nodeData }, 'latest'], {
+      retries: 1,
+    })
+    const node = rollupNodeInterface.decodeFunctionResult('getNode', nodeRes)[0]
+    const createdAtBlock = BigInt(node.createdAtBlock.toString())
+    if (createdAtBlock === 0n) return null
+    const block = await getBlock(rpcUrl, createdAtBlock)
+    return Number(block.timestamp)
+  } catch {
+    return null
+  }
 }
 
 // true = permissionless validation (whitelist disabled); false = whitelisted.

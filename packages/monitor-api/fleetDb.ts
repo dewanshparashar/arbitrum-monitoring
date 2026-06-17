@@ -94,6 +94,7 @@ type ChainRuntimeRow = {
   // pg returns timestamptz as a Date, so allow both.
   last_batch_seq?: string | null
   last_batch_seen_at?: string | Date | null
+  last_assertion_created_at?: string | Date | null
   checked_at_epoch: number | null
 }
 
@@ -871,9 +872,19 @@ export class FleetDb {
           lastBatchAt,
           assertionIntervalSeconds: chain.bridgeUiConfig.assertionIntervalSeconds,
         })
+        // Combine the indexer's latest-created assertion with the worker's
+        // direct Rollup probe (classic chains) — whichever is fresher. Keeps
+        // the assertion monitor accurate when the parent indexer lags. BoLD
+        // chains have no probe value, so they use the indexer timestamp.
+        const probedAssertionCreatedAt = runtime?.last_assertion_created_at
+          ? Math.floor(new Date(runtime.last_assertion_created_at).getTime() / 1000)
+          : null
+        const latestAssertionCreatedAt =
+          Math.max(assertion?.latest_created_at ?? 0, probedAssertionCreatedAt ?? 0) || null
+
         const assertionStatus = getAssertionStatus({
           nowSeconds,
-          latestCreatedAt: assertion?.latest_created_at ?? null,
+          latestCreatedAt: latestAssertionCreatedAt,
           latestConfirmedAt: assertion?.latest_confirmed_at ?? null,
           assertionIntervalSeconds: chain.bridgeUiConfig.assertionIntervalSeconds,
         })
@@ -912,7 +923,7 @@ export class FleetDb {
           assertionIntervalSeconds: chain.bridgeUiConfig.assertionIntervalSeconds,
           lastBatchAt,
           lastBatchSequenceNumber,
-          latestAssertionCreatedAt: assertion?.latest_created_at ?? null,
+          latestAssertionCreatedAt,
           latestAssertionConfirmedAt: assertion?.latest_confirmed_at ?? null,
           createdAssertions8d: parseCount(assertion?.created_count),
           confirmedAssertions8d: parseCount(assertion?.confirmed_count),

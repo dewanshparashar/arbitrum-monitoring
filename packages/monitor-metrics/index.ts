@@ -14,6 +14,7 @@ import {
   getErc20Balance,
   getErc20Decimals,
   getErc20Symbol,
+  getLatestAssertionCreatedAt,
   getLogs,
   getRetryableTransfer,
   getRollupBaseStake,
@@ -193,6 +194,9 @@ class MetricsDb {
       'batch_count numeric(78, 0)',
       'last_batch_seq numeric(78, 0)',
       'last_batch_seen_at timestamptz',
+      // Exact latest-created-assertion time probed from the Rollup (classic
+      // only), so assertion freshness survives parent-indexer lag.
+      'last_assertion_created_at timestamptz',
     ]) {
       await this.pool.query(`alter table ${this.chainRuntimeTable} add column if not exists ${col}`)
     }
@@ -567,6 +571,29 @@ class MetricsDb {
             checked_at = excluded.checked_at
       `,
       [row.chainId, row.batchCount, row.lastBatchSeq, row.checkedAt]
+    )
+  }
+
+  // Exact latest-created-assertion timestamp probed from the Rollup (classic
+  // chains only — null for BoLD). Overwrites each cycle with the live value,
+  // which only moves forward; the API takes the fresher of this and the
+  // indexer's timestamp, so a lagging indexer can't make a live chain look
+  // stalled. Only called with a non-null value, so it never clobbers a good
+  // reading with a transient probe failure.
+  async upsertChainAssertionCreatedAt(row: {
+    chainId: number
+    createdAtEpoch: number
+    checkedAt: string
+  }) {
+    await this.pool.query(
+      `
+        insert into ${this.chainRuntimeTable} (chain_id, last_assertion_created_at, checked_at)
+        values ($1, to_timestamp($2), $3)
+        on conflict (chain_id) do update
+        set last_assertion_created_at = excluded.last_assertion_created_at,
+            checked_at = excluded.checked_at
+      `,
+      [row.chainId, row.createdAtEpoch, row.checkedAt]
     )
   }
 
@@ -1523,6 +1550,19 @@ const syncChainRuntime = async (db: MetricsDb) => {
               chainId: chain.chainId,
               baseStakeWei,
               validatorWhitelistDisabled,
+              checkedAt,
+            })
+          }
+
+          // Live assertion freshness — exact latest-created-assertion time read
+          // from the Rollup (classic only; null for BoLD or on error). Keeps the
+          // assertion monitor accurate when the parent indexer lags. Only write
+          // a real reading so a transient null can't clobber the last good one.
+          const assertionCreatedAt = await getLatestAssertionCreatedAt(parentRpcUrl, rollup)
+          if (assertionCreatedAt !== null) {
+            await db.upsertChainAssertionCreatedAt({
+              chainId: chain.chainId,
+              createdAtEpoch: assertionCreatedAt,
               checkedAt,
             })
           }
