@@ -36,13 +36,14 @@ const BOOT_CMD = 'arb-monitor watch --fleet --interval 30s'
 const BOOT_TYPE_START = 250
 const BOOT_MS_PER_CHAR = 30
 const BOOT_TYPE_END = BOOT_TYPE_START + BOOT_CMD.length * BOOT_MS_PER_CHAR
-// output lines stream faster than the typed command (it's program output)
-const BOOT_LINE_RATE = 11 // ms per char
+// output lines stream much faster than the typed command (it's program output)
+// and fire back-to-back so they feel like a burst, not a slow reveal.
+const BOOT_LINE_RATE = 4 // ms per char
 const BOOT_T = {
-  l1: BOOT_TYPE_END + 300, // connecting to indexer
-  l2: BOOT_TYPE_END + 1250, // syncing chains
-  l3: BOOT_TYPE_END + 2250, // last probe / counts
-  done: BOOT_TYPE_END + 3350, // table drops in
+  l1: BOOT_TYPE_END + 150, // connecting to indexer
+  l2: BOOT_TYPE_END + 450, // syncing chains
+  l3: BOOT_TYPE_END + 750, // last probe / counts
+  done: BOOT_TYPE_END + 1050, // table drops in
 }
 
 const fmtTps = v => (v < 1 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : Math.round(v).toString())
