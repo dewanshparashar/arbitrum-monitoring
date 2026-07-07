@@ -1,7 +1,26 @@
 {
-  "generatedAt": "2026-06-09T15:03:38.766Z",
+  "generatedAt": "2026-07-07T07:46:07.677Z",
   "maxLookbackDays": 8,
   "portalMainnetChains": [
+    {
+      "chainId": 4663,
+      "name": "Robinhood Chain",
+      "slug": "robinhood-chain",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 45818,
+      "rpcUrl": "https://rpc.mainnet.chain.robinhood.com",
+      "explorerUrl": "https://robinhoodchain.blockscout.com",
+      "ethBridge": {
+        "bridge": "0xDf8755334ce7A73cCF6b581C02eA649AE3E864b3",
+        "rollup": "0x23A19d23e89166adedbDcB432518AB01e4272D94",
+        "sequencerInbox": "0xBd0D173EEb87D57A09521c24388a12789F33ba96"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": 3600,
+        "fastWithdrawalTime": null
+      },
+      "rollupEventFamily": "unknown"
+    },
     {
       "chainId": 660279,
       "name": "Xai",
@@ -55,25 +74,6 @@
       },
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 6300,
-        "fastWithdrawalTime": null
-      },
-      "rollupEventFamily": "unknown"
-    },
-    {
-      "chainId": 228,
-      "name": "Mind Network",
-      "slug": "mind-network",
-      "parentChainId": 42161,
-      "confirmPeriodBlocks": 7200,
-      "rpcUrl": "https://rpc-mainnet-internal.mindnetwork.xyz",
-      "explorerUrl": "https://explorer.mindnetwork.xyz",
-      "ethBridge": {
-        "bridge": "0x34F81F9C4F3227DbaCcFF8E51DBaa1571e114759",
-        "rollup": "0x435CEf963dE6CC2241da6f09CE6Bb3600cF259a9",
-        "sequencerInbox": "0xD00d2ef101d86C570dA8f38801f236b79a7a2A93"
-      },
-      "bridgeUiConfig": {
-        "assertionIntervalSeconds": 3600,
         "fastWithdrawalTime": null
       },
       "rollupEventFamily": "unknown"
@@ -189,25 +189,6 @@
       "bridgeUiConfig": {
         "assertionIntervalSeconds": 135000,
         "fastWithdrawalTime": 3600000
-      },
-      "rollupEventFamily": "unknown"
-    },
-    {
-      "chainId": 92278,
-      "name": "Miracle Chain",
-      "slug": "miracle-chain",
-      "parentChainId": 42161,
-      "confirmPeriodBlocks": 40320,
-      "rpcUrl": "https://rpc-miracle-chain-dqfxgxhidy.t.conduit.xyz",
-      "explorerUrl": "https://explorer-miracle-chain-dqfxgxhidy.t.conduit.xyz/",
-      "ethBridge": {
-        "bridge": "0xaF25849aEb040bEab7a0c783fc6861d26aE49796",
-        "rollup": "0x0DA5198b8ae8aE9354061649D08BE1c53ec8a377",
-        "sequencerInbox": "0x21f9c31eD91612B48A8ae450Bdd0f19F8f5Bea40"
-      },
-      "bridgeUiConfig": {
-        "assertionIntervalSeconds": 41400,
-        "fastWithdrawalTime": null
       },
       "rollupEventFamily": "unknown"
     },
@@ -495,6 +476,25 @@
         "fastWithdrawalTime": null
       },
       "rollupEventFamily": "unknown"
+    },
+    {
+      "chainId": 13600000,
+      "name": "Humanity Chain",
+      "slug": "humanity-chain",
+      "parentChainId": 1,
+      "confirmPeriodBlocks": 50400,
+      "rpcUrl": "https://humanity-main.g.alchemy.com/public",
+      "explorerUrl": "https://humanity-main.explorer.alchemy.com/",
+      "ethBridge": {
+        "bridge": "0x29786f674ED06684C5493aA5071b8B6F235Ba411",
+        "rollup": "0xc9233936E49ff34ca35fdB2F0C11f203F8f259B3",
+        "sequencerInbox": "0x6dC90693715f04fA363D4D3dAA99123C60319ca9"
+      },
+      "bridgeUiConfig": {
+        "assertionIntervalSeconds": null,
+        "fastWithdrawalTime": null
+      },
+      "rollupEventFamily": "unknown"
     }
   ],
   "portalParentChainIds": [
@@ -503,8 +503,8 @@
     42161
   ],
   "parentStartBlocks": {
-    "1": 25223042,
-    "8453": 46768432,
-    "42161": 468958330
+    "1": 25421660,
+    "8453": 47964897,
+    "42161": 478511001
   }
 }
