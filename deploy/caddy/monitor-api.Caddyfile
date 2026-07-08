@@ -1,0 +1,12 @@
+monitor.your-domain.example {
+  encode zstd gzip
+
+  @health path /health
+  handle @health {
+    reverse_proxy 127.0.0.1:4010
+  }
+
+  handle /api/* {
+    reverse_proxy 127.0.0.1:4010
+  }
+}

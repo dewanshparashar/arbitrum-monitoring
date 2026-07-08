@@ -1,132 +1,120 @@
 # Arbitrum Monitoring
 
-## Overview
+This repo now has an indexed fleet register path for Orbit mainnet chains.
 
-This monitoring suite helps you track the health and performance of your Arbitrum chains through three specialized monitors:
+## What ships here
 
-1. [**Retryable Monitor**](./packages/retryable-monitor/README.md) - Tracks ParentChain->ChildChain message execution and retryable ticket lifecycle
-2. [**Batch Poster Monitor**](./packages/batch-poster-monitor/README.md) - Monitors batch posting and data availability
-3. [**Assertion Monitor**](./packages/assertion-monitor/README.md) - Monitor assertion creation and validation on Arbitrum chains
+- `packages/monitor-indexer`: a Ponder indexer that derives its chain list from the latest portal `orbitChainsData.json` snapshot and indexes an 8-day window
+- `packages/monitor-metrics`: a metrics worker that probes RPC uptime/latency, snapshots bridge balances and ETH price, tracks the exit-message backlog, and writes a worker heartbeat
+- `packages/monitor-api`: a read-only API backed by Postgres
+- `packages/monitor-web`: a static fleet register UI that only talks to the API
 
-Each monitor has its own detailed documentation with technical specifics and implementation details.
+The original per-monitor packages are still in the repo as reference logic for the `R/B/A` decision tree, but the product path in this PR is indexer-first.
 
-## Prerequisites
+## Indexed sources
 
-- Node.js v18 or greater
-- Yarn package manager
-- Access to Arbitrum chain RPC endpoints
-- Access to parent chain RPC endpoints
-- Slack workspace for alerts (optional)
+The fleet indexer currently derives all mainnet chains from the portal snapshot and indexes:
 
-## Installation
+- `SequencerBatchDelivered` on each parent chain `SequencerInbox`
+- assertion events on each parent chain `Rollup`
+- retryable creation events on each parent chain `Bridge`
 
-1. Clone and install dependencies:
+The generated portal snapshot lives at [packages/monitor-indexer/src/generated/portalMainnet.json](./packages/monitor-indexer/src/generated/portalMainnet.json).
+
+## Local run
+
+Install dependencies:
 
 ```bash
-git clone https://github.com/OffchainLabs/arbitrum-monitoring.git
-cd arbitrum-monitoring
 yarn install
 ```
 
-## Configuration
-
-### Chain Configuration
-
-1. Copy and edit the config file:
+Refresh the mainnet portal snapshot and 8-day start blocks:
 
 ```bash
-cp config.example.json config.json
+yarn monitor-indexer:refresh-portal
 ```
 
-2. Configure your chains in `config.json`:
+That refresh step now also inspects each rollup contract on the parent chain and records its rollup event family (`classic` vs `bold`) so the indexer can register the right assertion ABI.
 
-```json
-{
-  "childChains": [
-    {
-      "name": "Your Chain Name",
-      "chainId": 421614,
-      "parentChainId": 11155111,
-      "confirmPeriodBlocks": 45818,
-      "parentRpcUrl": "https://your-parent-chain-rpc",
-      "orbitRpcUrl": "https://your-chain-rpc",
-      "ethBridge": {
-        "bridge": "0x...",
-        "inbox": "0x...",
-        "outbox": "0x...",
-        "rollup": "0x...",
-        "sequencerInbox": "0x..."
-      }
-    }
-  ]
-}
-```
-
-### Alert Configuration
-
-1. Copy and configure the environment file:
+Start the indexer against Postgres:
 
 ```bash
-cp .env.sample .env
+export POSTGRES_URL=postgres://...
+export DATABASE_SCHEMA=public
+yarn workspace monitor-indexer start
 ```
 
-2. Set up Slack alerts in `.env` (optional):
+If `DATABASE_SCHEMA` is unset, the indexer defaults to `public`. Set it explicitly if you want the API and indexer pointed at a different shared schema.
+
+Start the API:
 
 ```bash
-NODE_ENV=CI
-RETRYABLE_MONITORING_SLACK_TOKEN=your-slack-token
-RETRYABLE_MONITORING_SLACK_CHANNEL=your-slack-channel
-BATCH_POSTER_MONITORING_SLACK_TOKEN=your-slack-token
-BATCH_POSTER_MONITORING_SLACK_CHANNEL=your-slack-channel
-ASSERTION_MONITORING_SLACK_TOKEN=your-slack-token
-ASSERTION_MONITORING_SLACK_CHANNEL=your-slack-channel
+POSTGRES_URL=postgres://... yarn monitor-api
 ```
 
-Required environment variables:
-
-- `RETRYABLE_MONITORING_NOTION_TOKEN`: Notion API token for database integration
-- `RETRYABLE_MONITORING_NOTION_DB_ID`: Notion database ID for storing retryable tickets
-
-## Usage
-
-All monitors support these base options:
-
-- `--configPath`: Path to configuration file (default: "config.json")
-- `--enableAlerting`: Enable Slack alerts (default: false)
-
-### Quick Start Commands
+Start the web app:
 
 ```bash
-# Monitor retryable tickets
-yarn retryable-monitor [options]
-
-# Monitor batch posting
-yarn batch-poster-monitor [options]
-
-# Monitor chain assertions
-yarn assertion-monitor [options]
+yarn monitor-web
 ```
 
-See individual monitor READMEs for specific options and features:
+Default local URLs:
 
-- [Retryable Monitor Details](./packages/retryable-monitor/README.md)
-- [Batch Poster Monitor Details](./packages/batch-poster-monitor/README.md)
-- [Assertion Monitor Details](./packages/assertion-monitor/README.md)
+- web: `http://localhost:4020`
+- api: `http://localhost:4010`
 
-### Notion Integration
+## Environment
 
-When `--writeToNotion` is enabled, the monitor will:
+The indexed product path is env-driven:
 
-- Create new pages in the Notion database for each retryable ticket
-- Update existing pages when ticket status changes
-- Run a daily sweep to mark expired tickets
-- Track ticket status, creation time, expiration time, and transaction hashes
+- `POSTGRES_URL`
+- `DATABASE_SCHEMA` (optional, defaults to `public`)
+- `MONITOR_PARENT_RPC_OVERRIDES`
+- `MONITOR_API_HOST`
+- `MONITOR_API_PORT`
+- `MONITOR_API_CORS_ORIGIN`
+- `MONITOR_WEB_API_BASE`
 
-The Notion database should have the following properties:
+The portal refresh script currently uses public RPC defaults for parent chains and can be overridden in code if we want to move those into env vars next.
 
-- Ticket ID (title)
-- Status (select)
-- Created At (date)
-- Expires At (date)
-- Transaction Hash (url)
-- Last Updated (date)
+## Runtime model
+
+- `monitor-indexer` and `monitor-metrics` are the long-running **writers**: they talk to parent-chain RPCs and write rows into Postgres / Supabase Postgres. These run on the VPS (docker or systemd).
+- `monitor-api` reads those indexed tables and serves JSON to the frontend. It is **stateless and runs on Vercel**.
+- `monitor-web` is static, never populates the database itself, and **runs on Vercel**.
+- So the split is: VPS = writers (indexer + metrics worker); Vercel = read-only API + web, both against the same Supabase Postgres.
+
+## Product notes
+
+- The fleet table is intentionally driven from indexed reads only. It does not fetch chain state on page load.
+- The indexer now generates rollup event profiles during the portal refresh pass. If a chain profile is missing or unknown, the indexer registers both classic and BoLD assertion sources as a fallback instead of crashing.
+- `R/B/A` are derived from the existing retryable, batch poster, and assertion monitoring logic, but reduced into a simple fleet register view.
+- `RPC Uptime`, `Latency`, `Bridged TVL`, and `Pending Out` are scaffolded in the UI and called out in the design note below because they need separate indexed datasets.
+
+See [docs/fleet-register.md](./docs/fleet-register.md) for the current model and the next indexing passes.
+
+## VPS deploy
+
+The hosted shape is:
+
+- **VPS (docker or systemd)** runs the writers: `monitor-indexer` + `monitor-metrics`
+- **Vercel** runs the read-only `monitor-api` and the static `monitor-web`, both against the same Supabase Postgres
+
+On the VPS, `docker compose up -d --build` runs both writers detached (survives
+SSH logout and reboots via `restart: unless-stopped`). To update: `git pull`
+then re-run the same command.
+
+Deployment assets for a Hetzner VPS live in:
+
+- [docs/hetzner-vps.md](./docs/hetzner-vps.md)
+- [docs/docker-vps.md](./docs/docker-vps.md)
+- [deploy/hetzner/monitoring.env.example](./deploy/hetzner/monitoring.env.example)
+- [deploy/systemd/arbitrum-monitor-indexer.service](./deploy/systemd/arbitrum-monitor-indexer.service)
+- [deploy/systemd/arbitrum-monitor-metrics.service](./deploy/systemd/arbitrum-monitor-metrics.service)
+- [Dockerfile](./Dockerfile)
+- [docker-compose.yml](./docker-compose.yml)
+
+The Vercel side reads these env vars (`POSTGRES_URL`, `DATABASE_SCHEMA`,
+`MONITOR_API_CORS_ORIGIN`, `MONITOR_WEB_API_BASE`); the [Caddyfile](./deploy/caddy/monitor-api.Caddyfile)
+is only needed if you instead choose to self-host the API behind a reverse proxy.

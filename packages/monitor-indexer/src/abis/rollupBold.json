@@ -1,0 +1,174 @@
+[
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "assertionHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": true,
+        "name": "parentAssertionHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "name": "assertion",
+        "type": "tuple",
+        "components": [
+          {
+            "name": "beforeStateData",
+            "type": "tuple",
+            "components": [
+              {
+                "name": "prevPrevAssertionHash",
+                "type": "bytes32"
+              },
+              {
+                "name": "sequencerBatchAcc",
+                "type": "bytes32"
+              },
+              {
+                "name": "configData",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "wasmModuleRoot",
+                    "type": "bytes32"
+                  },
+                  {
+                    "name": "requiredStake",
+                    "type": "uint256"
+                  },
+                  {
+                    "name": "challengeManager",
+                    "type": "address"
+                  },
+                  {
+                    "name": "confirmPeriodBlocks",
+                    "type": "uint64"
+                  },
+                  {
+                    "name": "nextInboxPosition",
+                    "type": "uint64"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "beforeState",
+            "type": "tuple",
+            "components": [
+              {
+                "name": "globalState",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "bytes32Vals",
+                    "type": "bytes32[2]"
+                  },
+                  {
+                    "name": "u64Vals",
+                    "type": "uint64[2]"
+                  }
+                ]
+              },
+              {
+                "name": "machineStatus",
+                "type": "uint8"
+              },
+              {
+                "name": "endHistoryRoot",
+                "type": "bytes32"
+              }
+            ]
+          },
+          {
+            "name": "afterState",
+            "type": "tuple",
+            "components": [
+              {
+                "name": "globalState",
+                "type": "tuple",
+                "components": [
+                  {
+                    "name": "bytes32Vals",
+                    "type": "bytes32[2]"
+                  },
+                  {
+                    "name": "u64Vals",
+                    "type": "uint64[2]"
+                  }
+                ]
+              },
+              {
+                "name": "machineStatus",
+                "type": "uint8"
+              },
+              {
+                "name": "endHistoryRoot",
+                "type": "bytes32"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "indexed": false,
+        "name": "afterInboxBatchAcc",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "name": "inboxMaxCount",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "wasmModuleRoot",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "name": "requiredStake",
+        "type": "uint256"
+      },
+      {
+        "indexed": false,
+        "name": "challengeManager",
+        "type": "address"
+      },
+      {
+        "indexed": false,
+        "name": "confirmPeriodBlocks",
+        "type": "uint64"
+      }
+    ],
+    "name": "AssertionCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      {
+        "indexed": true,
+        "name": "assertionHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "name": "blockHash",
+        "type": "bytes32"
+      },
+      {
+        "indexed": false,
+        "name": "sendRoot",
+        "type": "bytes32"
+      }
+    ],
+    "name": "AssertionConfirmed",
+    "type": "event"
+  }
+]

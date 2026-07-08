@@ -1,0 +1,18 @@
+# VPS docker runs the backend writers only. The API and the web app are
+# deployed on Vercel (stateless, reading the same Postgres). See docs/docker-vps.md.
+services:
+  monitor-indexer:
+    build:
+      context: .
+      target: monitor-indexer
+    env_file:
+      - ./deploy/hetzner/monitoring.env
+    restart: unless-stopped
+
+  monitor-metrics:
+    build:
+      context: .
+      target: monitor-metrics
+    env_file:
+      - ./deploy/hetzner/monitoring.env
+    restart: unless-stopped

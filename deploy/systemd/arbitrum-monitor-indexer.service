@@ -1,0 +1,16 @@
+[Unit]
+Description=Arbitrum Fleet Register Indexer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/arbitrum-monitoring
+EnvironmentFile=/etc/arbitrum-monitoring/monitoring.env
+ExecStart=/usr/bin/env yarn workspace monitor-indexer start
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

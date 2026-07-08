@@ -1,0 +1,21 @@
+{
+  "name": "monitor-metrics",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@arbitrum/sdk": "^4.0.0",
+    "ethers": "^5.7.2",
+    "pg": "^8.13.1",
+    "yargs": "^17.7.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.1",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "build": "rm -rf ./dist && tsc",
+    "dev": "yarn build && node ./dist/monitor-metrics/main.js",
+    "start": "node ./dist/monitor-metrics/main.js"
+  }
+}

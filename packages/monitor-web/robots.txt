@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# Public read-only fleet API + agent guide
+# API: https://fleetwatch.xyz/api/fleet/overview
+# Agents: https://fleetwatch.xyz/llms.txt

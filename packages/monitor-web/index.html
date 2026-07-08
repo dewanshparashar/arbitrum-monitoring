@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>FleetWatch: Arbitrum Dedicated Chains Fleet Monitor</title>
+    <meta
+      name="description"
+      content="One indexed dashboard for the live operational health of Arbitrum dedicated chains. Track RPC uptime, bridge TVL, batch-poster cadence, assertion health, retryable tickets and ArbOS versions."
+    />
+    <meta name="keywords" content="Arbitrum, dedicated chains, fleet monitor, rollup, AnyTrust, RPC uptime, bridge TVL, batch poster, assertion, ArbOS, BoLD" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#080a0f" />
+    <link rel="canonical" href="https://fleetwatch.xyz/" />
+    <!-- Brand mark: shell prompt in signal-green (see Brand & Responsive) -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="mask-icon" href="/favicon.svg" color="#3DD68C" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="FleetWatch" />
+    <meta property="og:title" content="FleetWatch: Arbitrum Dedicated Chains Fleet Monitor" />
+    <meta
+      property="og:description"
+      content="Live operational health for every Arbitrum dedicated chain in one indexed dashboard. Track RPC uptime, bridge TVL, batch posting, assertion health and ArbOS versions."
+    />
+    <meta property="og:url" content="https://fleetwatch.xyz/" />
+    <meta property="og:image" content="https://fleetwatch.xyz/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="FleetWatch, the Arbitrum dedicated chains fleet monitor" />
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="FleetWatch: Arbitrum Dedicated Chains Fleet Monitor" />
+    <meta
+      name="twitter:description"
+      content="Live operational health for Arbitrum dedicated chains. RPC uptime, bridge TVL, batch poster, assertions and ArbOS versions."
+    />
+    <meta name="twitter:image" content="https://fleetwatch.xyz/og.png" />
+
+    <link rel="stylesheet" href="./ds.css" />
+    <style>
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        background: #080a0f;
+      }
+      #root {
+        min-height: 100vh;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes slideIn {
+        from {
+          transform: translateX(40px);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      @keyframes tipIn {
+        from {
+          opacity: 0;
+          transform: scale(0.96);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- runtime config (apiBase); served no-store per vercel.json -->
+    <script src="./config.js"></script>
+    <!-- bundled app (esbuild output) -->
+    <script src="./app.js"></script>
+  </body>
+</html>
